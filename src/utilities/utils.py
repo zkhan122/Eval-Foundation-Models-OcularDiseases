@@ -301,43 +301,79 @@ def train_one_epoch_urfound(model, dataloader, criterion, optimizer, device, epo
 
 
 
+def train_one_epoch_clip(model, dataloader, criterion, optimizer, device,
+                         epoch, scaler, grad_accum_steps, max_grad_norm):
 
-def train_one_epoch_clip(model, dataloader, criterion, optimizer, device, epoch, scaler):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
+
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1} - Training")
-    
-    for batch_idx, (images, labels, sources) in enumerate(progress_bar):
+    grad_accum_steps = max(1, int(grad_accum_steps))
+
+    optimizer.zero_grad()
+
+    for batch_idx, batch in enumerate(progress_bar):
+
+        if len(batch) == 3:
+            images, labels, sources = batch
+        else:
+            images, labels = batch
+
         images = images.to(device)
         labels = labels.to(device).long()
-        
-        optimizer.zero_grad()
-        
+
+        # forward
         if scaler is not None:
-            # Mixed precision training
-            with autocast(device_type="cuda"): 
-                outputs_obj = model(images)
-                image_features = outputs_obj.image_embeds
-                outputs = model.classifier(image_features)
+            with autocast(device_type="cuda"):
+                outputs = model(images)
                 loss = criterion(outputs, labels)
-            
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+
+            loss_to_backprop = loss / grad_accum_steps
+            scaler.scale(loss_to_backprop).backward()
+
         else:
-            # Regular training
-            outputs_obj = model(images)
-            image_features = outputs_obj.image_embeds
-            outputs = model.classifier(image_features)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-        
-        # Update metrics
+            outputs = model(images)
+            loss = criterion(logits, labels)
+
+            loss_to_backprop = loss / grad_accum_steps
+            loss_to_backprop.backward()
+
+        if (batch_idx + 1) % grad_accum_steps == 0:
+
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+
+                if max_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                if max_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
+                optimizer.step()
+
+            optimizer.zero_grad()
+
+        # ===== METRICS =====
         running_loss += loss.item()
-        progress_bar.set_postfix({'loss': running_loss / (batch_idx + 1)})
+        _, predicted = outputs.max(1)
+        total += labels.size(0)
+        correct += predicted.eq(labels).sum().item()
+
+        progress_bar.set_postfix({
+            "loss": running_loss / (batch_idx + 1),
+            "acc": 100 * correct / total
+        })
+
+    epoch_loss = running_loss / len(dataloader)
+    epoch_acc = 100 * correct / total
+
+    return epoch_loss, epoch_acc
+
 
 
 def validate_clip(model, dataloader, criterion, device):
@@ -372,6 +408,65 @@ def validate_clip(model, dataloader, criterion, device):
     val_acc = 100. * correct / total
 
     return val_loss, val_acc
+
+
+
+def validate_clip_with_metrics(model, dataloader, criterion, device, num_classes: int):
+    model.eval()
+    total_loss = 0.0
+    y_true, y_pred, y_probs = [], [], []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            if len(batch) == 3:
+                images, labels, _ = batch
+            else:
+                images, labels = batch
+
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+
+            probs = F.softmax(outputs, dim=1)
+            preds = outputs.argmax(dim=1)
+
+            y_true.extend(labels.detach().cpu().tolist())
+            y_pred.extend(preds.detach().cpu().tolist())
+            y_probs.extend(probs.detach().cpu().numpy())
+
+    val_loss = total_loss / len(dataloader)
+
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    y_probs = np.array(y_probs)
+
+    acc = 100.0 * (y_true == y_pred).mean()
+    bal_acc = 100.0 * balanced_accuracy_score(y_true, y_pred)
+    macro_f1 = 100.0 * f1_score(y_true, y_pred, average="macro")
+
+    report = classification_report(
+        y_true,
+        y_pred,
+        labels=list(range(num_classes)),
+        digits=4,
+        zero_division=0
+    )
+
+    try:
+        macro_auc = roc_auc_score(
+            y_true,
+            y_probs,
+            multi_class="ovr",
+            average="macro"
+        )
+        macro_auc *= 100.0
+    except ValueError:
+        macro_auc = float("nan")
+
+    return val_loss, acc, bal_acc, macro_f1, macro_auc, report
 
 
 def test_clip(model, dataloader, criterion, device):
