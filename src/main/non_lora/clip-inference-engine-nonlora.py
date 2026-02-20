@@ -3,9 +3,10 @@ import os
 import torch
 import optuna
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 # ensure parent path added so imports work when running as script
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from models.RETFound_MAE import models_vit
 from models.RETFound_MAE.util import pos_embed
 from timm.models.layers import trunc_normal_
@@ -19,7 +20,6 @@ from torch import nn
 from torch import optim
 from torch.amp import GradScaler
 from transformers import CLIPVisionModelWithProjection, CLIPProcessor
-from peft import get_peft_model, LoraConfig, TaskType
 
 
 
@@ -29,7 +29,7 @@ class CLIPRetina(nn.Module):
     def __init__(self, model_name, num_classes):
         super().__init__()
         self.vision = CLIPVisionModelWithProjection.from_pretrained(model_name)
-        
+
         embedding_dim = self.vision.config.projection_dim
         self.classifier = nn.Linear(embedding_dim, num_classes)
 
@@ -62,10 +62,6 @@ GRAD_ACCUM_STEPS = max(1, EFFECTIVE_BATCH_SIZE // MICRO_BATCH_SIZE)
 NUM_WORKERS = 8  # INCREASED from 4
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# LoRA (fixed baseline; tune later once stable)
-LORA_R = 8
-LORA_ALPHA = 32
-LORA_DROPOUT = 0.05
 
 # Optional stability knobs
 MAX_GRAD_NORM = 1.0
@@ -108,13 +104,11 @@ def make_param_groups(model: torch.nn.Module, weight_decay: float):
         else:
             decay.append(p)
 
-    groups = []
-    if decay:
-        groups.append({"params": decay, "weight_decay": weight_decay})
-    if no_decay:
-        groups.append({"params": no_decay, "weight_decay": 0.0})
-    if lora:
-        groups.append({"params": lora, "weight_decay": 0.0})  # key: no WD on LoRA
+    groups = [
+        {"params": decay, "weight_decay": weight_decay},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
+    
 
     return groups
 
@@ -145,8 +139,8 @@ def create_balanced_sampler(dataset, num_classes=NUM_CLASSES):
 
 
 def main():
-    DATA_DIR = "../../datasets"
-    SRC_DIR = "../"
+    DATA_DIR = "../../../datasets"
+    SRC_DIR = "../../"
 
     train_root_directories = {
         "DEEPDRID": f"{DATA_DIR}/DeepDRiD",
@@ -295,22 +289,48 @@ def main():
     print(processor)
 
     print("CLIP model loaded successfully")
-    
+
 
 
     print("LAYER NAMES:", list(set(get_specific_layer_names(model))))
     print()
-    print("\nWrapping model with LoRA adapters...")
-    peft_config = LoraConfig(
-        r=LORA_R,                  # rank
-        lora_alpha=LORA_ALPHA,
-        target_modules=["q_proj", "k_proj", "v_proj"], # target attention layers in ViT
-        lora_dropout=LORA_DROPOUT,
-        bias="none",    
-        modules_to_save=["head"]
-    )
 
-    model = get_peft_model(model, peft_config)
+
+    print("\nApplying hybrid fine-tuning...")
+
+    TOTAL_BLOCKS = len(model.blocks)
+    UNFREEZE_LAST_N = 6  # tweak
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    for block in model.blocks[TOTAL_BLOCKS - UNFREEZE_LAST_N:]:
+        for param in block.parameters():
+            param.requires_grad = True
+
+    # Unfreeze classification head
+    for param in model.head.parameters():
+        param.requires_grad = True
+
+    # Unfreeze norm layers
+    if hasattr(model, "norm"):
+        for param in model.norm.parameters():
+            param.requires_grad = True
+
+    if hasattr(model, "fc_norm"):
+        for param in model.fc_norm.parameters():
+            param.requires_grad = True
+
+    model = model.to(DEVICE)
+
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+
+    print(f"Trainable params: {trainable:,}")
+    print(f"Total params: {total:,}")
+    print(f"Percent trainable: {100 * trainable / total:.2f}%")
+
+
     model.print_trainable_parameters()
 
     model = model.to(DEVICE)
@@ -380,7 +400,7 @@ def main():
                   f"[Skipping validation]")
             continue
 
-        val_loss, val_acc, val_bal_acc, val_macro_f1, val_macro_auc, report = validate_retfound_with_metrics(
+        val_loss, val_acc, val_bal_acc, val_macro_f1, val_macro_auc, report = validate_clip_with_metrics(
             model, validation_loader, criterion, DEVICE, NUM_CLASSES
         )
 
@@ -402,9 +422,9 @@ def main():
             best_val_bal_acc = val_bal_acc
             best_val_acc = val_acc
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            print(f"★ New best balanced accuracy: {best_val_bal_acc:.2f}% (acc: {best_val_acc:.2f}%)")
+            print(f"New best balanced accuracy: {best_val_bal_acc:.2f}% (acc: {best_val_acc:.2f}%)")
 
-    plot_save_dir = "./plots/retfound"
+    plot_save_dir = "./plots/clip/nonlora"
     save_metric_plot(history_epochs, history_acc, "Validation Accuracy", plot_save_dir)
     save_metric_plot(history_epochs, history_bal_acc, "Balanced Accuracy", plot_save_dir)
     save_metric_plot(history_epochs, history_macro_f1, "Macro F1", plot_save_dir)
@@ -413,12 +433,11 @@ def main():
 
 
     os.makedirs("../best_models", exist_ok=True)
-    save_path = "../best_models/best_retfound_model.pth"
+    save_path = "../best_models/best_clip_nonlora_model.pth"
     torch.save({
         "val_acc": best_val_acc,
         "val_bal_acc": best_val_bal_acc,
         "model_state_dict": best_state,
-        "lora": {"r": LORA_R, "alpha": LORA_ALPHA, "dropout": LORA_DROPOUT},
         "train": {
             "epochs": NUM_EPOCHS,
             "lr_max": LR_MAX,

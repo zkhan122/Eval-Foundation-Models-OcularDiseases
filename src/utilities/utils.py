@@ -470,7 +470,7 @@ def validate_clip_with_metrics(model, dataloader, criterion, device, num_classes
 
 
 def test_clip(model, dataloader, criterion, device):
-    """Validate the model"""
+
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -478,49 +478,105 @@ def test_clip(model, dataloader, criterion, device):
 
     all_predictions = []
     all_labels = []
+    all_probs = []
 
     with torch.no_grad():
-        pbar = tqdm(dataloader, desc='Validation')
-        for batch_idx, (images, labels, sources) in enumerate(pbar):
+        pbar = tqdm(dataloader, desc="Validation")
+
+        for batch_idx, batch in enumerate(pbar):
+
+            if len(batch) == 3:
+                images, labels, _ = batch
+            else:
+                images, labels = batch
+
             images = images.to(device)
             labels = labels.to(device)
 
-            outputs_obj = model(images)
-            image_features = outputs_obj.image_embeds
-            outputs = model.classifier(image_features)
+            outputs = model(images)
             loss = criterion(outputs, labels)
 
             running_loss += loss.item()
+
+            probs = torch.softmax(outputs, dim=1)
             _, predicted = outputs.max(1)
+
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
             all_predictions.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            all_probs.extend(probs.cpu().numpy())
 
             pbar.set_postfix({
-                'loss': running_loss / (batch_idx + 1),
-                'acc': 100. * correct / total
+                "loss": running_loss / (batch_idx + 1),
+                "acc": 100.0 * correct / total
             })
 
     val_loss = running_loss / len(dataloader)
-    val_acc = 100. * correct / total
+    val_acc = 100.0 * correct / total
 
     all_predictions = np.array(all_predictions)
     all_labels = np.array(all_labels)
+    all_probs = np.array(all_probs)
 
-    precision, recall, f1, quadratic_weighted_kappa = calculate_metrics(all_labels, all_predictions)
-    
-    metrics = {
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "quadratic_weighted_kappa": quadratic_weighted_kappa
-    }
+    precision, recall, f1, qwk = calculate_metrics(
+        all_labels,
+        all_predictions
+    )
 
-    generate_confusion_matrix(all_labels, all_predictions, "results/clip", "clip_cf")
+    generate_confusion_matrix(
+        all_labels,
+        all_predictions,
+        "results/clip",
+        "clip_cf"
+    )
 
-    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa
+    # --------- AUROC ---------
+    num_classes = all_probs.shape[1]
+    per_class_auc = {}
+
+    for i in range(num_classes):
+        try:
+            auc = roc_auc_score(
+                (all_labels == i).astype(int),
+                all_probs[:, i]
+            )
+            per_class_auc[f"DR{i}"] = auc
+        except ValueError:
+            per_class_auc[f"DR{i}"] = None
+
+    try:
+        macro_auc = roc_auc_score(
+            all_labels,
+            all_probs,
+            multi_class="ovr",
+            average="macro"
+        )
+    except ValueError:
+        macro_auc = float("nan")
+
+    try:
+        weighted_auc = roc_auc_score(
+            all_labels,
+            all_probs,
+            multi_class="ovr",
+            average="weighted"
+        )
+    except ValueError:
+        weighted_auc = float("nan")
+
+    return (
+        val_loss,
+        val_acc,
+        precision,
+        recall,
+        f1,
+        qwk,
+        per_class_auc,
+        macro_auc,
+        weighted_auc
+    )
 
 
 def validate_retfound(model, dataloader, criterion, device):

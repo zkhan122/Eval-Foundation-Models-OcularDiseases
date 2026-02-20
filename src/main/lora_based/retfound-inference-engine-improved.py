@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from models.RETFound_MAE import models_vit
 from models.RETFound_MAE.util import pos_embed
@@ -160,8 +160,8 @@ def create_balanced_sampler(dataset, num_classes=NUM_CLASSES):
 
 
 def main():
-    DATA_DIR = "../../datasets"
-    SRC_DIR = "../"
+    DATA_DIR = "../../../datasets"
+    SRC_DIR = "../../"
 
     train_root_directories = {
         "DEEPDRID": f"{DATA_DIR}/DeepDRiD",

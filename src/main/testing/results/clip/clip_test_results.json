@@ -1,18 +1,21 @@
 {
-    "test_accuracy": 68.52057842046719,
-    "test_loss": 4.894945041338603,
-    "precision": 0.589166266970941,
-    "recall": 0.6035043666176839,
-    "f1_score": 0.592693877747682,
-    "quadratic_weighted_kappa": 0.81142827177542,
+    "test_accuracy": 55.850690381465014,
+    "test_loss": 2.724279632904756,
+    "precision": 0.41593013179958194,
+    "recall": 0.44893744273955527,
+    "f1_score": 0.41308904274904173,
+    "quadratic_weighted_kappa": 0.5347016653051637,
+    "Per-class AUC": [
+        0.7531871313087175,
+        0.5500118235038474,
+        0.7146120803708279,
+        0.8927318678218726,
+        0.8720250222672576
+    ],
+    "macro_auc": 0.7565135850545046,
+    "weighted_auc": 0.7405721594137309,
     "training_validation_accuracy": 71.03448275862068,
-    "hyperparameters": {
-        "lr": 0.0001649279205026361,
-        "batch_size": 4,
-        "weight_decay": 8.378657795829293e-06,
-        "lora_r": 8,
-        "lora_alpha": 16,
-        "lora_dropout": 0.19028770874666454
-    },
-    "trial_number": 1
+    "checkpoint": "best_clip_model.pth",
+    "lora": {},
+    "train": {}
 }

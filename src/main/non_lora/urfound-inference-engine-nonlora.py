@@ -6,13 +6,12 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.cuda.amp import GradScaler
-from peft import get_peft_model, LoraConfig
 
 from models.UrFound.finetune import models_vit
 from models.UrFound.util import pos_embed
@@ -47,10 +46,6 @@ GRAD_ACCUM_STEPS = max(1, EFFECTIVE_BATCH_SIZE // MICRO_BATCH_SIZE)
 
 NUM_WORKERS = 8
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-LORA_R = 8
-LORA_ALPHA = 32
-LORA_DROPOUT = 0.05
 
 MAX_GRAD_NORM = 1.0
 
@@ -89,28 +84,23 @@ def make_param_groups(model, weight_decay):
             continue
 
         name_l = name.lower()
-        if "lora_" in name_l:
-            lora.append(p)
-        elif name.endswith(".bias") or "norm" in name_l:
+        if name.endswith(".bias") or "norm" in name_l:
             no_decay.append(p)
         else:
             decay.append(p)
 
-    groups = []
-    if decay:
-        groups.append({"params": decay, "weight_decay": weight_decay})
-    if no_decay:
-        groups.append({"params": no_decay, "weight_decay": 0.0})
-    if lora:
-        groups.append({"params": lora, "weight_decay": 0.0})
+    groups = [
+        {"params": decay, "weight_decay": weight_decay},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
 
     return groups
 
 
 def main():
 
-    DATA_DIR = "../../datasets"
-    SRC_DIR = "../"
+    DATA_DIR = "../../../datasets"
+    SRC_DIR = "../../"
 
     train_root_directories = {
         "DEEPDRID": f"{DATA_DIR}/DeepDRiD",
@@ -162,10 +152,10 @@ def main():
 
     train_dataset.load_labels_from_csv(train_csv_paths)
     validation_dataset.load_labels_from_csv(val_csv_paths)
-    
+
     train_dataset.prune_unlabeled()
     validation_dataset.prune_unlabeled()
-    
+
     print("\n" + "="*60)
     print("SUBSAMPLING LARGE DATASETS")
     print("="*60)
@@ -190,7 +180,7 @@ def main():
 
     # Calculate class weights with capping
     class_weights_np = len(labels) / (NUM_CLASSES * class_counts.astype(float))
-    
+
     # IMPORTANT: Cap weights to prevent extreme values that cause model collapse
     max_weight = 12.0
     class_weights_np = np.clip(class_weights_np, None, max_weight)
@@ -210,7 +200,7 @@ def main():
     print("\n" + "="*60)
     print("CREATING BALANCED SAMPLER FOR TRAINING")
     print("="*60)
-    
+
 
 
     train_loader = DataLoader(
@@ -267,19 +257,32 @@ def main():
     # initializing the new classification head
     trunc_normal_(model.head.weight, std=2e-5)
 
-    print("\nWrapping model with LoRA adapters...")
+    
+    TOTAL_BLOCKS = len(model.blocks)
+    UNFREEZE_LAST_N = 6  # ViT-Base: 4–6 recommended
 
+    # Freeze all
+    for param in model.parameters():
+        param.requires_grad = False
 
-    peft_config = LoraConfig(
-        r=LORA_R,
-        lora_alpha=LORA_ALPHA,
-        target_modules=["qkv", "proj"],  # adjust if needed
-        lora_dropout=LORA_DROPOUT,
-        bias="none",
-        modules_to_save=["head"]
-    )
+    # Unfreeze last N transformer blocks
+    for block in model.blocks[TOTAL_BLOCKS - UNFREEZE_LAST_N:]:
+        for param in block.parameters():
+            param.requires_grad = True
 
-    model = get_peft_model(model, peft_config)
+    # Unfreeze classification head
+    for param in model.head.parameters():
+        param.requires_grad = True
+
+    # Unfreeze norm layers
+    if hasattr(model, "norm"):
+        for param in model.norm.parameters():
+            param.requires_grad = True
+
+    if hasattr(model, "fc_norm"):
+        for param in model.fc_norm.parameters():
+            param.requires_grad = True
+
     model = model.to(DEVICE)
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
@@ -294,7 +297,7 @@ def main():
 
     best_val_bal_acc = 0.0
     best_state = None
-        
+
     history_epochs = []
     history_acc = []
     history_bal_acc = []
@@ -329,14 +332,14 @@ def main():
         val_loss, val_acc, val_bal_acc, val_macro_f1, val_macro_auc, report =  validate_urfound_with_metrics(
                 model, validation_loader, criterion, DEVICE, NUM_CLASSES
             )
-        
+
         history_epochs.append(epoch + 1)
         history_acc.append(val_acc)
         history_bal_acc.append(val_bal_acc)
         history_macro_f1.append(val_macro_f1)
         history_macro_auc.append(val_macro_auc)
 
-        
+
         print(f"Epoch {epoch+1:03d}/{NUM_EPOCHS} | "
               f"lr={lr:.2e} | "
               f"train_loss={train_loss:.4f} train_acc={train_acc:.2f}%")
@@ -349,8 +352,8 @@ def main():
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             print(f"★ New best balanced accuracy: {best_val_bal_acc:.2f}%")
 
-    
-    plot_save_dir = "./plots/urfound"
+
+    plot_save_dir = "./plots/urfound/nonlora"
     save_metric_plot(history_epochs, history_acc, "Validation Accuracy", plot_save_dir)
     save_metric_plot(history_epochs, history_bal_acc, "Balanced Accuracy", plot_save_dir)
     save_metric_plot(history_epochs, history_macro_f1, "Macro F1", plot_save_dir)
@@ -358,12 +361,11 @@ def main():
 
 
     os.makedirs("../best_models", exist_ok=True)
-    save_path = "../best_models/best_urfound_model.pth"
+    save_path = "../best_models/best_urfound_nonlora_model.pth"
 
     torch.save({
         "val_bal_acc": best_val_bal_acc,
         "model_state_dict": best_state,
-        "lora": {"r": LORA_R, "alpha": LORA_ALPHA, "dropout": LORA_DROPOUT},
         "train": {
             "epochs": NUM_EPOCHS,
             "lr_max": LR_MAX,
