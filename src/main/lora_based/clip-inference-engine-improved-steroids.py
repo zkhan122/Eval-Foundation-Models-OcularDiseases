@@ -56,7 +56,7 @@ BETAS = (0.9, 0.99)
 WEIGHT_DECAY = 5e-4
 
 # Batch + accumulation (effective batch = 128)
-MICRO_BATCH_SIZE = 16   # set to what fits on your GPU (e.g., 4, 8, 16)
+MICRO_BATCH_SIZE = 8  # set to what fits on your GPU (e.g., 4, 8, 16)
 EFFECTIVE_BATCH_SIZE = 128
 GRAD_ACCUM_STEPS = max(1, EFFECTIVE_BATCH_SIZE // MICRO_BATCH_SIZE)
 
