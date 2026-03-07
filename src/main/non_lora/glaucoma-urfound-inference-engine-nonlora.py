@@ -10,23 +10,23 @@ import json
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from models.RETFound_MAE import models_vit
-from models.RETFound_MAE.util import pos_embed
-from timm.models.layers import trunc_normal_
 from torchvision import transforms
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torch import nn
+from torch.cuda.amp import GradScaler
 
-# glaucoma dataset class
+from models.UrFound.finetune import models_vit
+from models.UrFound.util import pos_embed
+from timm.models.layers import trunc_normal_
+
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
 from utilities.utils import (
     identity_transform,
-    train_one_epoch_retfound,
-    validate_retfound_with_metrics,
+    train_one_epoch_urfound,
+    validate_urfound_with_metrics,
     save_metric_plot,
     plot_all_benchmark
 )
-from torch.cuda.amp import GradScaler
 
 
 # -------------------------
@@ -56,8 +56,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_GRAD_NORM = 1.0
 
 print(f"Using device: {DEVICE}")
-print(f"Micro batch: {MICRO_BATCH_SIZE} | Effective batch: {MICRO_BATCH_SIZE * GRAD_ACCUM_STEPS} "
-      f"| Grad accum steps: {GRAD_ACCUM_STEPS}")
+print(f"Micro batch: {MICRO_BATCH_SIZE} | Effective batch: {MICRO_BATCH_SIZE * GRAD_ACCUM_STEPS}")
 
 
 def seed_everything(seed: int):
@@ -85,20 +84,20 @@ def lr_at_epoch(epoch: int) -> float:
     return LR_MIN + 0.5 * (LR_MAX - LR_MIN) * (1 + math.cos(math.pi * t))
 
 
-def make_param_groups(model: torch.nn.Module, weight_decay: float):
+def make_param_groups(model, weight_decay):
     decay, no_decay, lora = [], [], []
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
         name_l = name.lower()
-        if name.endswith(".bias") or "norm" in name_l or "bn" in name_l:
+        if name.endswith(".bias") or "norm" in name_l:
             no_decay.append(p)
         else:
             decay.append(p)
     groups = [
             {"params": decay, "weight_decay": weight_decay},
             {"params": no_decay, "weight_decay": 0.0}
-        ]
+            ]
     return groups
 
 
@@ -141,14 +140,14 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    # no augmentation for val/test
+    # no augmentation for val
     eval_transformations = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    # glaucoma dataset handles labels internally — no load_labels_from_csv needed
+    # labels loaded internally — no load_labels_from_csv needed
     train_dataset = CombinedGlaucomaDataset(
         root_directories=root_dirs,
         split="train",
@@ -191,25 +190,34 @@ def main():
         prefetch_factor=2
     )
 
-    # load retfound backbone
-    model = models_vit.__dict__["vit_large_patch16"](
+    # urfound uses vit_base not vit_large (unlike retfound)
+    model = models_vit.__dict__["vit_base_patch16"](
         num_classes=NUM_CLASSES,
         drop_path_rate=0.2,
         global_pool=True
     )
 
-    checkpoint_path = f"{SRC_DIR}/models/RETFound_MAE/weights/RETFound_cfp_weights.pth"
+    checkpoint_path = f"{SRC_DIR}/models/UrFound/weights/urfound_model_weights.pth"
+    print(f"Loading pretrained weights from: {checkpoint_path}")
+
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     checkpoint_model = checkpoint["model"]
     state_dict = model.state_dict()
 
-    # drop mismatched head weights — our head is 2-class not 1000-class
+    # drop mismatched head weights — our head is 2-class
     for k in ["head.weight", "head.bias"]:
         if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
+            print(f"Removing key {k} from pretrained checkpoint (shape mismatch)")
             del checkpoint_model[k]
 
     pos_embed.interpolate_pos_embed(model, checkpoint_model)
-    model.load_state_dict(checkpoint_model, strict=False)
+    msg = model.load_state_dict(checkpoint_model, strict=False)
+    print(f"Missing keys: {msg.missing_keys}")
+    print(f"Unexpected keys: {msg.unexpected_keys}")
+
+    # urfound also has fc_norm missing — expected
+    assert set(msg.missing_keys) == {"head.weight", "head.bias", "fc_norm.weight", "fc_norm.bias"}
+
     # small init for new head
     trunc_normal_(model.head.weight, std=2e-5)
 
@@ -257,16 +265,14 @@ def main():
             torch.cuda.reset_peak_memory_stats(DEVICE)
         t0 = time.perf_counter()
 
-        train_loss, train_acc = train_one_epoch_retfound(
+        train_loss, train_acc = train_one_epoch_urfound(
             model=model,
             dataloader=train_loader,
             criterion=criterion,
             optimizer=optimizer,
             device=DEVICE,
             epoch=epoch,
-            scaler=scaler,
-            grad_accum_steps=GRAD_ACCUM_STEPS,
-            max_grad_norm=MAX_GRAD_NORM,
+            scaler=scaler
         )
 
         epoch_time = time.perf_counter() - t0
@@ -289,7 +295,7 @@ def main():
         if (epoch + 1) % 10 != 0:
             continue
 
-        val_loss, val_acc, val_bal_acc, val_macro_f1, val_macro_auc, report = validate_retfound_with_metrics(
+        val_loss, val_acc, val_bal_acc, val_macro_f1, val_macro_auc, report = validate_urfound_with_metrics(
             model, val_loader, criterion, DEVICE, NUM_CLASSES
         )
 
@@ -303,7 +309,7 @@ def main():
               f"macro_f1={val_macro_f1:.2f}% | macro_auc={val_macro_auc:.2f}%")
         print(report)
 
-        # save best by balanced accuracy — more meaningful than raw acc given imbalance
+        # save best by balanced accuracy
         if val_bal_acc > best_val_bal_acc:
             best_val_bal_acc = val_bal_acc
             best_val_acc = val_acc
@@ -311,7 +317,7 @@ def main():
             print(f"★ new best balanced accuracy: {best_val_bal_acc:.2f}%")
 
     # save metric plots
-    plot_save_dir = "./plots/retfound-nonlora-glaucoma"
+    plot_save_dir = "./plots/urfound-nonlora-glaucoma"
     save_metric_plot(history_epochs, history_acc,       "Validation Accuracy", plot_save_dir)
     save_metric_plot(history_epochs, history_bal_acc,   "Balanced Accuracy",   plot_save_dir)
     save_metric_plot(history_epochs, history_macro_f1,  "Macro F1",            plot_save_dir)
@@ -345,43 +351,43 @@ def main():
     print(f"  avg throughput  : {s['avg_throughput_sps']:.1f} samples/s")
     print(f"{'=' * 60}\n")
 
-    os.makedirs("../best_models", exist_ok=True)
-    with open("../best_models/retfound-nonlora-glaucoma-benchmark.json", "w") as f:
+    os.makedirs("../../best_models", exist_ok=True)
+    with open("../../best_models/urfound-nonlora-glaucoma-benchmark.json", "w") as f:
         json.dump(benchmark, f, indent=4)
 
     plot_all_benchmark(
         source=benchmark,
-        output_dir="../../plots/nonlora-final-plots/retfound-glaucoma-nonlora-benchmark-plots",
+        output_dir="../../plots/nonlora-final-plots/urfound-glaucoma-nonlora-benchmark-plots",
         skip=1,
-        model_name="RETFound Non-LoRA Glaucoma",
+        model_name="UrFound Non-LoRA Glaucoma",
     )
 
-    save_path = "../best_models/best_retfound_glaucoma_nonlora-model.pth"
+    save_path = "../../best_models/best_urfound_glaucoma_nonlora_model.pth"
     torch.save({
         "val_acc":          best_val_acc,
         "val_bal_acc":      best_val_bal_acc,
         "model_state_dict": best_state,
         "num_classes":      NUM_CLASSES,
         "train": {
-            "epochs":          NUM_EPOCHS,
-            "lr_max":          LR_MAX,
-            "lr_min":          LR_MIN,
-            "warmup_epochs":   WARMUP_EPOCHS,
-            "cooldown_epochs": COOLDOWN_EPOCHS,
-            "weight_decay":    WEIGHT_DECAY,
-            "betas":           BETAS,
-            "micro_batch":     MICRO_BATCH_SIZE,
+            "epochs":           NUM_EPOCHS,
+            "lr_max":           LR_MAX,
+            "lr_min":           LR_MIN,
+            "warmup_epochs":    WARMUP_EPOCHS,
+            "cooldown_epochs":  COOLDOWN_EPOCHS,
+            "weight_decay":     WEIGHT_DECAY,
+            "betas":            BETAS,
+            "micro_batch":      MICRO_BATCH_SIZE,
             "grad_accum_steps": GRAD_ACCUM_STEPS,
-            "effective_batch": MICRO_BATCH_SIZE * GRAD_ACCUM_STEPS
+            "effective_batch":  MICRO_BATCH_SIZE * GRAD_ACCUM_STEPS
         }
     }, save_path)
 
     print(f"\n{'=' * 60}")
     print(f"TRAINING COMPLETE")
     print(f"{'=' * 60}")
-    print(f"best val accuracy         : {best_val_acc:.2f}%")
-    print(f"best balanced accuracy    : {best_val_bal_acc:.2f}%")
-    print(f"saved model to            : {save_path}")
+    print(f"best val accuracy      : {best_val_acc:.2f}%")
+    print(f"best balanced accuracy : {best_val_bal_acc:.2f}%")
+    print(f"saved model to         : {save_path}")
     print(f"{'=' * 60}\n")
 
 
