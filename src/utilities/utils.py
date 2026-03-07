@@ -498,12 +498,15 @@ def validate_clip_with_metrics(model, dataloader, criterion, device, num_classes
     )
 
     try:
-        macro_auc = roc_auc_score(
-            y_true,
-            y_probs,
-            multi_class="ovr",
-            average="macro"
-        )
+        if num_classes == 2:
+            macro_auc = roc_auc_score(y_true, y_probs[:, 1])
+        else:
+            macro_auc = roc_auc_score(
+                y_true,
+                y_probs,
+                multi_class="ovr",
+                average="macro"
+            )
         macro_auc *= 100.0
     except ValueError:
         macro_auc = float("nan")
@@ -701,12 +704,15 @@ def validate_retfound_with_metrics(model, dataloader, criterion, device, num_cla
     macro_f1 = 100.0 * f1_score(y_true, y_pred, average="macro")
 
     try:
-        macro_auc = roc_auc_score(
-            y_true,
-            y_probs,
-            multi_class="ovr",   # one-vs-rest (standard for medical papers)
-            average="macro"
-        )
+        if num_classes == 2:
+            macro_auc = roc_auc_score(y_true, y_probs[:, 1])
+        else:
+            macro_auc = roc_auc_score(
+                y_true,
+                y_probs,
+                multi_class="ovr",   # one-vs-rest (standard for medical papers)
+                average="macro"
+            )
         macro_auc *= 100.0
     except ValueError:
         macro_auc = 0.0  # if class is missing in batch
@@ -891,12 +897,15 @@ def validate_urfound_with_metrics(model, dataloader, criterion, device, num_clas
     )
 
     try:
-        macro_auc = roc_auc_score(
-            y_true,
-            y_probs,
-            multi_class="ovr",
-            average="macro"
-        )
+        if num_classes == 2:
+            macro_auc = roc_auc_score(y_true, y_probs[:, 1])
+        else:
+            macro_auc = roc_auc_score(
+                y_true,
+                y_probs,
+                multi_class="ovr",
+                average="macro"
+            )
         macro_auc *= 100.0
     except ValueError:
         macro_auc = float("nan")
