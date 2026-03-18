@@ -1,0 +1,35 @@
+{
+    "accuracy": 65.81782566111654,
+    "balanced_accuracy": 65.64634174766333,
+    "macro_f1": 65.55014255453473,
+    "sensitivity": 64.09691629955947,
+    "specificity": 67.19576719576719,
+    "macro_auc": 71.37923532930876,
+    "weighted_auc": 71.37923532930836,
+    "per_class_auc": {
+        "Healthy": 71.37923532930874,
+        "Glaucoma": 71.37923532930876
+    },
+    "test_loss": 0.6582657308317721,
+    "checkpoint": "best_retfound_glaucoma_model.pth",
+    "lora": {
+        "r": 8,
+        "alpha": 32,
+        "dropout": 0.05
+    },
+    "train": {
+        "epochs": 50,
+        "lr_max": 0.0005,
+        "lr_min": 1e-06,
+        "warmup_epochs": 5,
+        "cooldown_epochs": 10,
+        "weight_decay": 0.0005,
+        "betas": [
+            0.9,
+            0.99
+        ],
+        "micro_batch": 8,
+        "grad_accum_steps": 16,
+        "effective_batch": 128
+    }
+}
