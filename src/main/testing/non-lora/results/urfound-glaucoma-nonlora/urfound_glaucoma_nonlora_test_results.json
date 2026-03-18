@@ -1,0 +1,30 @@
+{
+    "accuracy": 60.72477962781586,
+    "balanced_accuracy": 58.71228896192186,
+    "macro_f1": 58.176981766957425,
+    "sensitivity": 40.52863436123348,
+    "specificity": 76.89594356261023,
+    "macro_auc": 59.93559113970274,
+    "weighted_auc": 59.935591139702325,
+    "per_class_auc": {
+        "Healthy": 59.93559113970274,
+        "Glaucoma": 59.93559113970274
+    },
+    "test_loss": 0.7147499264683574,
+    "checkpoint": "best_urfound_glaucoma_nonlora_model.pth",
+    "train": {
+        "epochs": 50,
+        "lr_max": 0.0005,
+        "lr_min": 1e-06,
+        "warmup_epochs": 5,
+        "cooldown_epochs": 10,
+        "weight_decay": 0.0005,
+        "betas": [
+            0.9,
+            0.99
+        ],
+        "micro_batch": 8,
+        "grad_accum_steps": 16,
+        "effective_batch": 128
+    }
+}

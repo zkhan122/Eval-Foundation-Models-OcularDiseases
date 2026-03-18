@@ -113,6 +113,9 @@ class CombinedGlaucomaDataset(Dataset):
         if "REFUGE" in self.root_directories:
             self.load_REFUGE()
 
+        if "EYEPACS_GLAUCOMA" in self.root_directories:
+            self.load_EYEPACS_GLAUCOMA()
+
 
     # ------------------------------------------------------------------
     # G1020 loader
@@ -366,6 +369,61 @@ class CombinedGlaucomaDataset(Dataset):
             loaded_count += 1
 
         print(f"REFUGE '{self.split}' split: {loaded_count} images loaded.")
+
+
+    # ------------------------------------------------------------------
+    # EYEPACS_GLAUCOMA loader
+    # ------------------------------------------------------------------
+    def load_EYEPACS_GLAUCOMA(self):
+        """
+        EYEPACS_GLAUCOMA structure:
+            EYEPACS_GLAUCOMA_ROOT/
+                train/
+                    NRG/   <- non-referable glaucoma, label 0
+                    RG/    <- referable glaucoma,     label 1
+                val/
+                    NRG/
+                    RG/
+                test/
+                    NRG/
+                    RG/
+
+        Labels are encoded directly in subfolder names — no CSV parsing needed.
+        Predefined splits are respected (like REFUGE), not re-derived (like G1020/ORIGA).
+        """
+        EYEPACS_ROOT = Path(self.root_directories["EYEPACS_GLAUCOMA"])
+
+        print(f"\nEYEPACS_GLAUCOMA_ROOT: {EYEPACS_ROOT}")
+        print(f"EYEPACS_GLAUCOMA exists: {EYEPACS_ROOT.exists()}")
+
+        split_dir = EYEPACS_ROOT / self.split
+
+        if not split_dir.exists():
+            print(f"ERROR: EYEPACS_GLAUCOMA '{self.split}' folder not found at {split_dir}")
+            return
+
+        # subfolder name -> binary label mapping
+        class_map = {"NRG": 0, "RG": 1}
+
+        loaded_count = 0
+        for class_name, label in class_map.items():
+            class_dir = split_dir / class_name
+
+            if not class_dir.exists():
+                print(f"WARNING: {class_name} folder not found at {class_dir}, skipping.")
+                continue
+
+            for filename in os.listdir(class_dir):
+                _, ext = os.path.splitext(filename)
+                if ext.lstrip('.').lower() not in valid_file_extensions:
+                    continue
+
+                self.image_paths.append(str(class_dir / filename))
+                self.labels.append(label)
+                self.sources.append("EYEPACS_GLAUCOMA")
+                loaded_count += 1
+
+        print(f"EYEPACS_GLAUCOMA '{self.split}' split: {loaded_count} images loaded.")
 
 
     # ------------------------------------------------------------------

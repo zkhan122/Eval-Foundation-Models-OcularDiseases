@@ -13,7 +13,7 @@ def load_auc_data(json_path):
     return data["Per-class AUC"]
 
 def class_auc_collated(json_paths, model_names, class_names, output_dir, MODE):
-    
+
     if os.path.exists(output_dir):
         for file in os.listdir(output_dir):
             if file.endswith(".png") or file.endswith(".jpg") or file.endswith(".jpeg"):
@@ -23,30 +23,28 @@ def class_auc_collated(json_paths, model_names, class_names, output_dir, MODE):
     model_aucs = {}
     for path, model_name in zip(json_paths, model_names):
         model_aucs[model_name] = load_auc_data(path)
-    
+
     fig, ax = plt.subplots(figsize=(12, 6))
-    
-    x = np.arange(len(class_names))  # class positions
-    width = 0.25  # bar width
-    
+
+    x = np.arange(len(class_names))
+    width = 0.25
+
     color_map = {
-        'CLIP': '#2ca02c',      # green
-        'RETFound': '#1f77b4',  # blue
-        'UrFound': '#ff7f0e'    # orange
-    } 
-    
-    # bars for each model
+        'CLIP': '#2ca02c',
+        'RETFound': '#1f77b4',
+        'UrFound': '#ff7f0e'
+    }
+
     for i, model_name in enumerate(model_names):
         color = color_map[model_name]
-        offset = (i - 1) * width  # -0.25, 0, 0.25
-        bars = ax.bar(x + offset, model_aucs[model_name], width, 
+        offset = (i - 1) * width
+        bars = ax.bar(x + offset, model_aucs[model_name], width,
                      label=model_name, color=color, edgecolor='black')
-        # value labels
         for bar in bars:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                    f'{height:.3f}', ha='center', va='bottom', fontsize=8)
-    
+
     ax.set_ylabel('AUC-ROC Score')
     ax.set_xlabel('Diabetic Retinopathy Severity')
     ax.set_title(f"{MODE} Tuned Models - AUC Comparison")
@@ -55,7 +53,7 @@ def class_auc_collated(json_paths, model_names, class_names, output_dir, MODE):
     ax.set_ylim([0.5, 1.0])
     ax.legend()
     ax.grid(True, axis='y', alpha=0.3)
-    
+
     plt.tight_layout()
     plt.savefig(output_dir, dpi=300, bbox_inches='tight')
     plt.close()
@@ -63,9 +61,9 @@ def class_auc_collated(json_paths, model_names, class_names, output_dir, MODE):
 
 
 COLOR_MAP = {
-    'CLIP':     '#2ca02c',   # green
-    'RETFound': '#1f77b4',   # blue
-    'UrFound':  '#ff7f0e',   # orange
+    'CLIP':     '#2ca02c',
+    'RETFound': '#1f77b4',
+    'UrFound':  '#ff7f0e',
 }
 
 PUBLICATION_RC = {
@@ -94,7 +92,6 @@ def _apply_rc():
     plt.rcParams.update(PUBLICATION_RC)
 
 
-
 def _plot_single_metric(json_paths, model_names, output_dir, MODE,
                         metric_key, metric_display, filename):
     _apply_rc()
@@ -104,7 +101,7 @@ def _plot_single_metric(json_paths, model_names, output_dir, MODE,
 
     fig, ax = plt.subplots(figsize=(7, 2.8))
 
-    y_positions = np.arange(n_models)[::-1]   
+    y_positions = np.arange(n_models)[::-1]
 
     v_min  = min(values)
     v_max  = max(values)
@@ -147,6 +144,10 @@ def _label_bars(ax, bars, fmt='{:.3f}', fontsize=8.5, pad=0.004):
             fontfamily='serif'
         )
 
+
+# -------------------------
+# DR plotting functions
+# -------------------------
 
 def plot_auc_bars(json_paths, model_names, output_dir, MODE):
     _apply_rc()
@@ -218,7 +219,128 @@ def plot_all_metrics(json_paths, model_names, output_dir, MODE):
 
     print(f'\nAll plots saved to: {output_dir}')
 
-    
+
+# -------------------------
+# Glaucoma plotting functions
+# keys available: accuracy, balanced_accuracy, macro_f1,
+#                 sensitivity, specificity, macro_auc,
+#                 weighted_auc, per_class_auc
+# -------------------------
+
+def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
+    """macro auc and weighted auc side-by-side bar chart"""
+    _apply_rc()
+
+    metrics = ['macro_auc', 'weighted_auc']
+    labels  = ['Macro AUC', 'Weighted AUC']
+    x       = np.arange(len(labels))
+    width   = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data   = _load_json(path)
+        vals   = [data[m] for m in metrics]
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+        bars   = ax.bar(x + offset, vals, width,
+                        label=model, color=color,
+                        edgecolor='black', linewidth=0.6, zorder=3)
+        _label_bars(ax, bars)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel('AUC Score')
+    ax.set_title(f'{MODE} Glaucoma — Macro & Weighted AUC', pad=12)
+    ax.set_ylim(0.5, 1.05)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'glaucoma_auc_bar_comparison.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
+
+
+def plot_glaucoma_per_class_auc(json_paths, model_names, output_dir, MODE):
+    """per-class auc (Healthy vs Glaucoma) grouped bar chart"""
+    _apply_rc()
+
+    class_names = ['Healthy', 'Glaucoma']
+    x     = np.arange(len(class_names))
+    width = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data   = _load_json(path)
+        # per_class_auc is a dict: {"Healthy": val, "Glaucoma": val}
+        vals   = [data['per_class_auc'].get(c, 0.0) or 0.0 for c in class_names]
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+        bars   = ax.bar(x + offset, vals, width,
+                        label=model, color=color,
+                        edgecolor='black', linewidth=0.6, zorder=3)
+        _label_bars(ax, bars)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(class_names)
+    ax.set_ylabel('AUC Score')
+    ax.set_title(f'{MODE} Glaucoma — Per-Class AUC', pad=12)
+    ax.set_ylim(0.5, 1.05)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'glaucoma_per_class_auc.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
+
+
+def plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'balanced_accuracy', 'Balanced Accuracy',
+                        'glaucoma_balanced_accuracy.png')
+
+
+def plot_glaucoma_macro_f1(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'macro_f1', 'Macro F1',
+                        'glaucoma_macro_f1.png')
+
+
+def plot_glaucoma_sensitivity(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'sensitivity', 'Sensitivity (Glaucoma Recall)',
+                        'glaucoma_sensitivity.png')
+
+
+def plot_glaucoma_specificity(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'specificity', 'Specificity (Healthy Recall)',
+                        'glaucoma_specificity.png')
+
+
+def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
+    os.makedirs(output_dir, exist_ok=True)
+
+    plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE)
+    plot_glaucoma_per_class_auc(json_paths, model_names, output_dir, MODE)
+    plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE)
+    plot_glaucoma_macro_f1(json_paths, model_names, output_dir, MODE)
+    plot_glaucoma_sensitivity(json_paths, model_names, output_dir, MODE)
+    plot_glaucoma_specificity(json_paths, model_names, output_dir, MODE)
+
+    print(f'\nAll glaucoma plots saved to: {output_dir}')
+
 
 if __name__ == "__main__":
 
@@ -226,42 +348,38 @@ if __name__ == "__main__":
     DR_LORA_TEST_RESULTS_DIR = "./testing/lora-based/results"
 
     lora_jsons = [
-      f"{DR_LORA_TEST_RESULTS_DIR}/retfound/retfound_test_results.json",
-       f"{DR_LORA_TEST_RESULTS_DIR}/urfound/urfound_test_results.json",
-        f"{DR_LORA_TEST_RESULTS_DIR}/clip/clip_test_results.json"]
-    
+        f"{DR_LORA_TEST_RESULTS_DIR}/retfound-glaucoma/retfound_glaucoma_test_results.json",
+        f"{DR_LORA_TEST_RESULTS_DIR}/urfound-glaucoma/urfound_glaucoma_test_results.json",
+        f"{DR_LORA_TEST_RESULTS_DIR}/clip-glaucoma/clip_glaucoma_test_results.json",
+    ]
 
-    
     non_lora_jsons = [
-        f"{DR_NONLORA_TEST_RESULTS_DIR}/retfound/retfound_nonlora_test_results.json",
-        f"{DR_NONLORA_TEST_RESULTS_DIR}/urfound/urfound_nonlora_test_results.json",
-        f"{DR_NONLORA_TEST_RESULTS_DIR}/clip/clip_nonlora_test_results.json"]
-
+        f"{DR_NONLORA_TEST_RESULTS_DIR}/retfound-glaucoma-nonlora/retfound_glaucoma_nonlora_test_results.json",
+        f"{DR_NONLORA_TEST_RESULTS_DIR}/urfound-glaucoma-nonlora/urfound_glaucoma_nonlora_test_results.json",
+        f"{DR_NONLORA_TEST_RESULTS_DIR}/clip-glaucoma-nonlora/clip_glaucoma_nonlora_test_results.json",
+    ]
 
     try:
         with open(non_lora_jsons[0], 'r') as file:
             data = json.load(file)
         print("File data =", data)
-
     except FileNotFoundError:
         print("Error: The file was not found.")
 
-
     dr_classes = [
-    "No DR",
-    "Mild",
-    "Moderate",
-    "Severe",
-    "Proliferative DR"
+        "No DR",
+        "Mild",
+        "Moderate",
+        "Severe",
+        "Proliferative DR"
     ]
 
     model_names = ["RETFound", "UrFound", "CLIP"]
 
-    #class_auc_collated(non_lora_jsons, model_names, dr_classes, "../plots/nonlora-final-plots", "NON-LORA")
-    
+    # DR plots
+    # class_auc_collated(non_lora_jsons, model_names, dr_classes, "../plots/nonlora-final-plots", "NON-LORA")
     # class_auc_collated(lora_jsons, model_names, dr_classes, "../plots/lora-final-plots", "LORA")
 
-
-
-    plot_all_metrics(lora_jsons, model_names, "../plots/lora-final-plots", "LORA")
-    plot_all_metrics(non_lora_jsons, model_names, "../plots/nonlora-final-plots", "NONLORA")
+    # Glaucoma plots
+    plot_all_metrics_glaucoma(lora_jsons, model_names, "../plots/lora-final-plots/glaucoma", "LORA")
+    plot_all_metrics_glaucoma(non_lora_jsons, model_names, "../plots/nonlora-final-plots/glaucoma", "NONLORA")

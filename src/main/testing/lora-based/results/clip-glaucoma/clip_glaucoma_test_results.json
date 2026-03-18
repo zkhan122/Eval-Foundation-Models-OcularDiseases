@@ -1,0 +1,35 @@
+{
+    "accuracy": 70.71498530852107,
+    "balanced_accuracy": 69.74823050447132,
+    "macro_f1": 69.9000312556386,
+    "sensitivity": 61.013215859030836,
+    "specificity": 78.48324514991182,
+    "macro_auc": 78.78664273671615,
+    "weighted_auc": 78.78664273671583,
+    "per_class_auc": {
+        "Healthy": 78.78664273671616,
+        "Glaucoma": 78.78664273671615
+    },
+    "test_loss": 0.5555344362510368,
+    "checkpoint": "best_clip_glaucoma_lora_model.pth",
+    "lora": {
+        "r": 8,
+        "alpha": 32,
+        "dropout": 0.05
+    },
+    "train": {
+        "epochs": 50,
+        "lr_max": 0.0005,
+        "lr_min": 1e-06,
+        "warmup_epochs": 5,
+        "cooldown_epochs": 10,
+        "weight_decay": 0.0005,
+        "betas": [
+            0.9,
+            0.99
+        ],
+        "micro_batch": 8,
+        "grad_accum_steps": 16,
+        "effective_batch": 128
+    }
+}
