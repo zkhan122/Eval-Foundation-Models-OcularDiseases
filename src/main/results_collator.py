@@ -1,4 +1,5 @@
 import os
+import shutil
 import seaborn as sns
 import matplotlib.pyplot as plt
 import json
@@ -266,44 +267,6 @@ def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
     print(f'Saved: {out}')
 
 
-def plot_glaucoma_per_class_auc(json_paths, model_names, output_dir, MODE):
-    """per-class auc (Healthy vs Glaucoma) grouped bar chart"""
-    _apply_rc()
-
-    class_names = ['Healthy', 'Glaucoma']
-    x     = np.arange(len(class_names))
-    width = 0.22
-    n_models = len(model_names)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    for i, (path, model) in enumerate(zip(json_paths, model_names)):
-        data   = _load_json(path)
-        # per_class_auc is a dict: {"Healthy": val, "Glaucoma": val}
-        vals = [data['per_class_auc'].get(c, 0.0) / 100.0 for c in class_names]
-        offset = (i - (n_models - 1) / 2) * width
-        color  = COLOR_MAP.get(model, f'C{i}')
-        bars   = ax.bar(x + offset, vals, width,
-                        label=model, color=color,
-                        edgecolor='black', linewidth=0.6, zorder=3)
-        _label_bars(ax, bars)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(class_names)
-    ax.set_ylabel('AUC Score')
-    ax.set_title(f'{MODE} Glaucoma — Per-Class AUC', pad=12)
-    ax.set_ylim(0.5, 1.05)
-    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
-    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
-    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
-    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
-
-    plt.tight_layout()
-    out = os.path.join(output_dir, 'glaucoma_per_class_auc.png')
-    plt.savefig(out, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f'Saved: {out}')
-
 
 def plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE):
     _plot_single_metric(json_paths, model_names, output_dir, MODE,
@@ -333,7 +296,6 @@ def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
     os.makedirs(output_dir, exist_ok=True)
 
     plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE)
-    plot_glaucoma_per_class_auc(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_macro_f1(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_sensitivity(json_paths, model_names, output_dir, MODE)
@@ -347,12 +309,20 @@ if __name__ == "__main__":
     DR_NONLORA_TEST_RESULTS_DIR = "./testing/non-lora/results"
     DR_LORA_TEST_RESULTS_DIR = "./testing/lora-based/results"
     GLAUCOMA_RESNET50_TEST_RESULTS_DIR = "./testing/results/resnet50-glaucoma"
-
+    GLAUCOMA_RESNET50_TEST_PLOTS_DIR = "../plots/baseline-plots/resnet50-glaucoma-testing-plots"
     #lora_jsons = [
     #]
 
     #non_lora_jsons = [
     #]
+        
+
+    if os.path.exists(GLAUCOMA_RESNET50_TEST_PLOTS_DIR):
+        shutil.rmtree(GLAUCOMA_RESNET50_TEST_PLOTS_DIR)
+        print(f"Removed directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
+
+    os.makedirs(GLAUCOMA_RESNET50_TEST_PLOTS_DIR, exist_ok=True)
+    print(f"Created directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
 
     resnet_50_glaucoma_jsons = [f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"]
 
@@ -373,4 +343,4 @@ if __name__ == "__main__":
     # class_auc_collated(lora_jsons, model_names, dr_classes, "../plots/lora-final-plots", "LORA")
 
     # Glaucoma plots
-    plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, model_names, "../plots/baseline-plots/resnet50-glaucoma-testing-plots", "ResNet50-Glaucoma")
+    plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, model_names, GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "ResNet50-Glaucoma")
