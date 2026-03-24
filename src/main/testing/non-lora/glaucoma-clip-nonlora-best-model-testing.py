@@ -20,6 +20,7 @@ from sklearn.metrics import (
 
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
 from utilities.utils import identity_transform, json_to_csv
+import numpy as np
 
 NUM_CLASSES = 2
 NUM_WORKERS = 4
@@ -112,7 +113,7 @@ def evaluate(model, dataloader, criterion, device, threshold):
 
     return (avg_loss, acc, bal_acc, macro_f1,
             per_class_auc, macro_auc, weighted_auc,
-            sensitivity, specificity, report)
+            sensitivity, specificity, report, y_probs)
 
 
 def main():
@@ -166,7 +167,7 @@ def main():
     THRESHOLD = 0.6
     (test_loss, acc, bal_acc, macro_f1,
      per_class_auc, macro_auc, weighted_auc,
-     sensitivity, specificity, report) = evaluate(
+     sensitivity, specificity, report, y_probs) = evaluate(
         model, test_loader, criterion, DEVICE, THRESHOLD
     )
 
@@ -212,6 +213,8 @@ def main():
         json.dump(results, f, indent=4)
 
     json_to_csv(results_path, "results/clip-glaucoma-nonlora", "clip_glaucoma_nonlora_results")
+    
+    np.save("../probs_numpy/clip_glaucoma_nonlora_probs.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")
 

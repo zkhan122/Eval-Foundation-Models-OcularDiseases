@@ -9,17 +9,14 @@ from tqdm import tqdm
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from models.RETFound_MAE import models_vit
-from models.RETFound_MAE.util import pos_embed
-from timm.models.layers import trunc_normal_
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch import nn
+from transformers import ResNetForImageClassification
 from sklearn.metrics import (
     roc_auc_score, balanced_accuracy_score, f1_score,
     classification_report, confusion_matrix
 )
-from peft import get_peft_model, LoraConfig
 
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
 from utilities.utils import identity_transform, json_to_csv
@@ -32,25 +29,7 @@ DATA_DIR = "../../../../datasets"
 SRC_DIR = "../../../"
 
 
-def load_retfound_backbone(model, checkpoint_path):
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    checkpoint_model = checkpoint["model_state_dict"]
-    state_dict = model.state_dict()
-
-    # dropping head if shape mismatches beacuse 2 classes
-    for k in ["head.weight", "head.bias"]:
-        if k in checkpoint_model and k in state_dict:
-            if checkpoint_model[k].shape != state_dict[k].shape:
-                del checkpoint_model[k]
-
-    pos_embed.interpolate_pos_embed(model, checkpoint_model)
-    model.load_state_dict(checkpoint_model, strict=False)
-    trunc_normal_(model.head.weight, std=2e-5)
-    return model
-
-
 def evaluate(model, dataloader, criterion, device, threshold):
-    """run inference, return full metrics including per-class and weighted auc"""
     model.eval()
     total_loss = 0.0
     y_true, y_pred, y_probs = [], [], []
@@ -60,11 +39,12 @@ def evaluate(model, dataloader, criterion, device, threshold):
         for images, labels in pbar:
             images = images.to(device)
             labels = labels.to(device)
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+
+            outputs = model(pixel_values=images)
+            loss = criterion(outputs.logits, labels)
             total_loss += loss.item()
 
-            probs = F.softmax(outputs, dim=1)
+            probs = F.softmax(outputs.logits, dim=1)
             preds = (probs[:, 1] >= threshold).long()
 
             y_true.extend(labels.cpu().tolist())
@@ -125,8 +105,8 @@ def evaluate(model, dataloader, criterion, device, threshold):
 
 def main():
     root_dirs = {
-        "G1020":  f"{DATA_DIR}/G1020",
-        "ORIGA":  f"{DATA_DIR}/ORIGA",
+        "G1020":            f"{DATA_DIR}/G1020",
+        "ORIGA":            f"{DATA_DIR}/ORIGA",
         "EYEPACS_GLAUCOMA": f"{DATA_DIR}/EYEPACS_GLAUCOMA",
     }
 
@@ -146,34 +126,21 @@ def main():
     print(f"Test samples: {len(test_dataset)}")
     print(test_dataset.get_dataset_statistics())
 
-    best_path = f"{SRC_DIR}/best_models/best_retfound_glaucoma_model.pth"
+    best_path = f"{SRC_DIR}/best_models/best_resnet50_glaucoma_model.pth"
     checkpoint = torch.load(best_path, map_location="cpu", weights_only=False)
 
-    lora_cfg   = checkpoint.get("lora",  {"r": 8, "alpha": 32, "dropout": 0.05})
     train_cfg  = checkpoint.get("train", {})
     batch_size = train_cfg.get("micro_batch", 8)
 
     print(f"\nCheckpoint: bal_acc={checkpoint.get('val_bal_acc', 'N/A'):.2f}%")
-    print(f"LoRA r={lora_cfg['r']} alpha={lora_cfg['alpha']}")
 
-    model = models_vit.__dict__["vit_large_patch16"](
-        num_classes=NUM_CLASSES,
-        drop_path_rate=0.2,
-        global_pool=True
+    # reconstruct with same num_labels and ignore_mismatched_sizes as training,
+    # then immediately overwrite all weights from checkpoint — no imagenet download needed
+    model = ResNetForImageClassification.from_pretrained(
+        "microsoft/resnet-50",
+        num_labels=NUM_CLASSES,
+        ignore_mismatched_sizes=True
     )
-
-    model = load_retfound_backbone(model, best_path)
-
-    peft_config = LoraConfig(
-        r=lora_cfg["r"],
-        lora_alpha=lora_cfg["alpha"],
-        lora_dropout=lora_cfg["dropout"],
-        target_modules=["qkv", "proj"],
-        bias="none",
-        modules_to_save=["head"],
-    )
-
-    model = get_peft_model(model, peft_config)
     model.load_state_dict(checkpoint["model_state_dict"], strict=True)
     model = model.to(DEVICE)
     model.eval()
@@ -188,7 +155,7 @@ def main():
         pin_memory=True,
         persistent_workers=True,
     )
-    
+
     THRESHOLD = 0.6
     (test_loss, acc, bal_acc, macro_f1,
      per_class_auc, macro_auc, weighted_auc,
@@ -224,12 +191,11 @@ def main():
                               for k, v in per_class_auc.items()},
         "test_loss":         float(test_loss),
         "checkpoint":        os.path.basename(best_path),
-        "lora":              lora_cfg,
         "train":             train_cfg,
     }
 
-    os.makedirs("results/retfound-glaucoma", exist_ok=True)
-    results_path = "results/retfound-glaucoma/retfound_glaucoma_test_results.json"
+    os.makedirs("results/resnet50-glaucoma", exist_ok=True)
+    results_path = "results/resnet50-glaucoma/resnet50_glaucoma_test_results.json"
 
     if os.path.exists(results_path):
         os.remove(results_path)
@@ -238,11 +204,9 @@ def main():
     with open(results_path, "w") as f:
         json.dump(results, f, indent=4)
 
-    json_to_csv(results_path, "results/retfound-glaucoma", "retfound_glaucoma_results")
-    
-    os.makedirs("../probs_numpy", exist_ok=True)
-    
-    np.save("../probs_numpy/retfound_lora_glaucoma_probs.npy", y_probs)
+    json_to_csv(results_path, "results/resnet50-glaucoma", "resnet50_glaucoma_results")
+
+    np.save("../probs_numpy/resnet50-glaucoma-testing.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")
 

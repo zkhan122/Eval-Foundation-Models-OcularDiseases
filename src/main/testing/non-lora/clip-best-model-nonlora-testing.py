@@ -16,7 +16,7 @@ from utilities.utils import json_to_csv, identity_transform, show_images, test_c
 from torch import nn
 from torch import optim
 from torch.cuda.amp import autocast, GradScaler
-
+import numpy as np
 
 
 class CLIPRetina(nn.Module):
@@ -193,7 +193,7 @@ criterion = nn.CrossEntropyLoss()
 test_loader = DataLoader(test_dataset, batch_size=MICRO_BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc = test_clip(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs = test_clip(
     model, test_loader, criterion, DEVICE
 )
 
@@ -266,6 +266,8 @@ with open(results_path, "w") as f:
     json.dump(results, f, indent=4)
 
 json_to_csv(results_path, "results/clip", "clip_nonlora_test_results")
+
+np.save("../probs_numpy/clip-dr-nonlora-probs.npy", y_probs)
 
 print(f"\nResults saved to: {results_path}")
 print("=" * 70)

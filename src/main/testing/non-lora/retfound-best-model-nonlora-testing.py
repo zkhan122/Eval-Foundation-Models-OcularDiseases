@@ -56,6 +56,15 @@ def load_retfound_backbone(model):
     return model
 
 
+def strip_prefix(state_dict, prefix="base_model.model."):
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith(prefix):
+            new_state_dict[k[len(prefix):]] = v
+        else:
+            new_state_dict[k] = v
+    return new_state_dict
+
 def main():
     # ==================== DATA ====================
     test_root_directories = {
@@ -110,12 +119,24 @@ def main():
         global_pool=True
     )
 
-    model = load_retfound_backbone(model)
+    model = models_vit.__dict__["vit_large_patch16"](
+    num_classes=NUM_CLASSES,
+    drop_path_rate=0.2,
+    global_pool=True
+)
 
+    checkpoint_model = strip_prefix(checkpoint["model_state_dict"])
+    checkpoint_model = {k: v for k, v in checkpoint_model.items() if "lora_" not in k}
 
-    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
-    model = model.to(DEVICE)
-    model.eval()
+    pos_embed.interpolate_pos_embed(model, checkpoint_model)
+
+    missing, unexpected = model.load_state_dict(checkpoint_model, strict=False)
+
+    print("Missing:", missing)
+    print("Unexpected:", unexpected)
+
+    checkpoint_model = model.to(DEVICE)
+    checkpoint_:model.eval()
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -135,7 +156,7 @@ def main():
         persistent_workers=True,
     )
 
-    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc = test_retfound(
+    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs = test_retfound(
         model=model,
         dataloader=test_loader,
         criterion=criterion,
@@ -193,6 +214,8 @@ def main():
         json.dump(results, f, indent=4)
 
     json_to_csv(results_path, "results/retfound", "retfound_nonlora_test_results")
+    
+    np.save("../probs_numpy/retfound_dr_nonlora_probs.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")
     print("=" * 70)

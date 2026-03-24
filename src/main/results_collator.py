@@ -304,6 +304,59 @@ def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
     print(f'\nAll glaucoma plots saved to: {output_dir}')
 
 
+# Jensen - Shannon Divergence on each probability matrix for each type of model
+
+JS_DIVERGENCE_EPSILON = 1e-10
+
+def js_divergence(p, q):
+    p = np.clip(p, JS_DIVERGENCE_EPSILON, 1.0)
+    q = np.clip(q, JS_DIVERGENCE_EPSILON, 1.0)
+    m = 0.5 * (p + q)
+    return float(np.mean(0.5 * np.sum(p * np.log(p / m) + q * np.log(q / m), axis=1)))
+
+
+def compute_pairwise_js(probs_dict):
+    names  = list(probs_dict.keys())
+    result = {}
+    for a in names:
+        for b in names:
+            result[f"{a}_vs_{b}"] = 0.0 if a == b else js_divergence(
+                probs_dict[a], probs_dict[b]
+            )
+    return result
+
+
+def plot_js_heatmap(js_dict, model_names, title, output_path):
+    plt.rcParams.update(PUBLICATION_RC)
+    n      = len(model_names)
+    matrix = np.zeros((n, n))
+    for i, a in enumerate(model_names):
+        for j, b in enumerate(model_names):
+            matrix[i, j] = js_dict[f"{a}_vs_{b}"]
+
+    # scale figure size with number of models so annotations don't overlap
+    cell_size = 1.1
+    fig_size  = max(6, n * cell_size)
+    fig, ax   = plt.subplots(figsize=(fig_size, fig_size * 0.85))
+
+    sns.heatmap(
+        matrix, annot=True, fmt=".4f",
+        xticklabels=model_names, yticklabels=model_names,
+        cmap="YlOrRd", ax=ax, linewidths=0.5,
+        annot_kws={"size": max(7, 10 - n)},   # shrink font as matrix grows
+        cbar_kws={"label": "JS Divergence"}
+    )
+    # title is now passed in as a parameter — no hardcoding
+    ax.set_title(title, pad=12)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.tick_params(axis='x', rotation=45)
+    ax.tick_params(axis='y', rotation=0)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {output_path}")
+
 if __name__ == "__main__":
 
     DR_NONLORA_TEST_RESULTS_DIR = "./testing/non-lora/results"
@@ -316,31 +369,87 @@ if __name__ == "__main__":
     #non_lora_jsons = [
     #]
         
+    PROBS_DIR = "./testing/probs_numpy"
+    JS_PLOT_DIR = "../plots/js-divergence"
+    JS_RESULTS_DIR = "./testing/results/js-divergence"
 
-    if os.path.exists(GLAUCOMA_RESNET50_TEST_PLOTS_DIR):
-        shutil.rmtree(GLAUCOMA_RESNET50_TEST_PLOTS_DIR)
-        print(f"Removed directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
+    # need to run once else the plots will be recreated
 
-    os.makedirs(GLAUCOMA_RESNET50_TEST_PLOTS_DIR, exist_ok=True)
-    print(f"Created directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
+    # if os.path.exists(GLAUCOMA_RESNET50_TEST_PLOTS_DIR):
+      #  shutil.rmtree(GLAUCOMA_RESNET50_TEST_PLOTS_DIR)
+       # print(f"Removed directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
 
-    resnet_50_glaucoma_jsons = [f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"]
+    # os.makedirs(GLAUCOMA_RESNET50_TEST_PLOTS_DIR, exist_ok=True)
+    # print(f"Created directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
 
-    dr_classes = [
-        "No DR",
-        "Mild",
-        "Moderate",
-        "Severe",
-        "Proliferative DR"
-    ]
+    # resnet_50_glaucoma_jsons = [
+#        f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"
+ #   ]
 
+    dr_classes = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
     glaucoma_classes = ["Healthy", "Glaucoma"]
-
     model_names = ["ResNet50"]
 
-    # DR plots
-    # class_auc_collated(non_lora_jsons, model_names, dr_classes, "../plots/nonlora-final-plots", "NON-LORA")
-    # class_auc_collated(lora_jsons, model_names, dr_classes, "../plots/lora-final-plots", "LORA")
+    # glaucoma plots
+    # plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, model_names, GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
 
-    # Glaucoma plots
-    plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, model_names, GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "ResNet50-Glaucoma")
+    # JS divergence — only runs if all .npy prob files exist
+    
+    dr_prob_files = {
+        "RETFound_LORA_DR": f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
+        "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_probs.npy",
+        "UrFound_LORA_DR": f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
+        "UrFound_NONLORA_DR": f"{PROBS_DIR}/urfound_nonlora_dr_probs.npy",
+        "CLIP_LORA_DR": f"{PROBS_DIR}/clip_dr_lora_probs.npy",
+        "CLIP_NONLORA_DR": f"{PROBS_DIR}/clip_dr_nonlora_probs.npy"
+    }
+
+    glaucoma_prob_files = {
+        "RETFound_LORA_GLAUCOMA": f"{PROBS_DIR}/retfound_lora_glaucoma_probs.npy",
+        "RETFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/retfound_glaucoma_nonlora_probs.npy",
+        "UrFound_LORA_GLAUCOMA": f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
+        "UrFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
+        "CLIP_LORA_GLAUCOMA": f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
+        "CLIP_NONLORA_GLAUCOMA": f"{PROBS_DIR}/clip_glaucoma_nonlora_probs.npy",
+        "ResNet50_GLAUCOMA": f"{PROBS_DIR}/resnet50-glaucoma-testing-probs.npy",
+    }
+
+    # DR JS divergence
+    if all(os.path.exists(p) for p in dr_prob_files.values()):
+        probs_dict     = {name: np.load(path) for name, path in dr_prob_files.items()}
+        js_results     = compute_pairwise_js(probs_dict)
+        model_names_js = list(probs_dict.keys())
+
+        os.makedirs(JS_RESULTS_DIR, exist_ok=True)
+        with open(f"{JS_RESULTS_DIR}/dr_js_divergence.json", "w") as f:
+            json.dump({"task": "DR severity grading", "js_divergence": js_results}, f, indent=4)
+
+        os.makedirs(JS_PLOT_DIR, exist_ok=True)
+        plot_js_heatmap(
+            js_results, model_names_js,
+            "DR Severity Grading — Pairwise Jensen-Shannon Divergence\n(0 = identical distributions, 1 = non-overlapping)",
+            f"{JS_PLOT_DIR}/dr_js_heatmap.png"
+        )
+    else:
+        missing = [name for name, path in dr_prob_files.items() if not os.path.exists(path)]
+        print(f"Skipping DR JS divergence — missing prob files for: {missing}")
+
+    # Glaucoma JS divergence
+    if all(os.path.exists(p) for p in glaucoma_prob_files.values()):
+        probs_dict     = {name: np.load(path) for name, path in glaucoma_prob_files.items()}
+        js_results     = compute_pairwise_js(probs_dict)
+        model_names_js = list(probs_dict.keys())
+
+        os.makedirs(JS_RESULTS_DIR, exist_ok=True)
+        with open(f"{JS_RESULTS_DIR}/glaucoma_js_divergence.json", "w") as f:
+            json.dump({"task": "glaucoma detection", "js_divergence": js_results}, f, indent=4)
+
+        os.makedirs(JS_PLOT_DIR, exist_ok=True)
+        plot_js_heatmap(
+            js_results, model_names_js,
+            "Glaucoma Detection — Pairwise Jensen-Shannon Divergence\n(0 = identical distributions, 1 = non-overlapping)",
+            f"{JS_PLOT_DIR}/glaucoma_js_heatmap.png"
+        )
+    else:
+        missing = [name for name, path in glaucoma_prob_files.items() if not os.path.exists(path)]
+        print(f"Skipping glaucoma JS divergence — missing prob files for: {missing}")

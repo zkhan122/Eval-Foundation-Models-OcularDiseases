@@ -16,7 +16,7 @@ from torch import nn
 from torch import optim
 from torch.cuda.amp import autocast, GradScaler
 from peft import get_peft_model, LoraConfig, TaskType
-
+import numpy as np
 
 
 class CLIPRetina(nn.Module):
@@ -200,7 +200,7 @@ class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
 
 roc_save_path = os.path.join("./results/clip", "clip_lora_roc_data.json")
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc = test_clip(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs = test_clip(
     model, test_loader, criterion, DEVICE, class_names, roc_save_path)
 
 
@@ -262,6 +262,6 @@ results = {
 results_path = "results/clip/clip_test_results.json"
 with open(results_path, "w") as f:
     json.dump(results, f, indent=4)
-
+np.save("../probs_numpy/clip_dr_lora_probs.npy", y_probs)
 print(f"\nResults saved to: {results_path}")
 print("="*70)

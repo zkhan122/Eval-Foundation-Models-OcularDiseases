@@ -3,7 +3,7 @@ import os
 import json
 import torch
 import optuna
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from models.UrFound.finetune import models_vit
 from models.UrFound.util import pos_embed
 from timm.models.layers import trunc_normal_
@@ -17,13 +17,14 @@ from torch import nn
 from torch import optim
 from torch.cuda.amp import autocast, GradScaler
 from peft import get_peft_model, LoraConfig, TaskType
+import numpy as np
 
 NUM_CLASSES = 5
 NUM_WORKERS = 4
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-DATA_DIR = "../../../datasets"
-SRC_DIR = "../../"
+DATA_DIR = "../../../../datasets"
+SRC_DIR = "../../../"
 
 test_root_directories = {
     "DEEPDRID": f"{DATA_DIR}/DeepDRiD",
@@ -117,7 +118,7 @@ criterion = nn.CrossEntropyLoss()
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc = test_urfound(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs  = test_urfound(
     model=model,
     dataloader=test_loader,
     criterion=criterion,
@@ -178,6 +179,8 @@ results = {
 results_path = "results/urfound/urfound_test_results.json"
 with open(results_path, "w") as f:
     json.dump(results, f, indent=4)
+
+np.save("../probs_numpy/urfound_lora_dr_probs.npy", y_probs)
 
 print(f"\nResults saved to: {results_path}")
 print("="*70)

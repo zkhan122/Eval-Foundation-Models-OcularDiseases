@@ -514,7 +514,7 @@ def validate_clip_with_metrics(model, dataloader, criterion, device, num_classes
     return val_loss, acc, bal_acc, macro_f1, macro_auc, report
 
 
-def test_clip(model, dataloader, criterion, device, class_names, save_roc_path):
+def test_clip(model, dataloader, criterion, device):
 
     model.eval()
     running_loss = 0.0
@@ -612,9 +612,6 @@ def test_clip(model, dataloader, criterion, device, class_names, save_roc_path):
         weighted_auc = float("nan")
     
     
-    if save_roc_path is not None:
-        save_roc_curve_data(all_labels, all_probs, class_names, save_roc_path)
-
     return (
         val_loss,
         val_acc,
@@ -624,7 +621,8 @@ def test_clip(model, dataloader, criterion, device, class_names, save_roc_path):
         qwk,
         per_class_auc,
         macro_auc,
-        weighted_auc
+        weighted_auc,
+        all_probs
     )
 
 
@@ -812,7 +810,7 @@ def test_retfound(model, dataloader, criterion, device):
     
     generate_confusion_matrix(all_labels, all_predictions, "results/retfound", "retfound_cf")
 
-    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc
+    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc, all_probabilities
 
 
 
@@ -1019,7 +1017,8 @@ def test_urfound(model, dataloader, criterion, device):
         qwk,
         per_class_auc,
         macro_auc,
-        weighted_auc
+        weighted_auc,
+        all_probs
     )
 
 

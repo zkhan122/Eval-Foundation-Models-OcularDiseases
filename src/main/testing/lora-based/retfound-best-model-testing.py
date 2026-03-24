@@ -173,7 +173,7 @@ def main():
         persistent_workers=True,
     )
 
-    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc = test_retfound(
+    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs = test_retfound(
         model=model,
         dataloader=test_loader,
         criterion=criterion,
@@ -228,6 +228,8 @@ def main():
         json.dump(results, f, indent=4)
 
     json_to_csv(results_path, "results/retfound", "retfound_results")
+
+    np.save("../probs_numpy/retfound_dr_lora_probs.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")
     print("=" * 70)
