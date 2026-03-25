@@ -350,7 +350,7 @@ def plot_js_heatmap(js_dict, model_names, title, output_path):
     ax.set_title(title, pad=12)
     ax.set_xlabel("")
     ax.set_ylabel("")
-    ax.tick_params(axis='x', rotation=45)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
     ax.tick_params(axis='y', rotation=0)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
