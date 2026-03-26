@@ -65,6 +65,7 @@ COLOR_MAP = {
     'CLIP':     '#2ca02c',
     'RETFound': '#1f77b4',
     'UrFound':  '#ff7f0e',
+    'ResNet50': '#9467bd',   # purple — distinct from the three foundation models
 }
 
 PUBLICATION_RC = {
@@ -147,7 +148,9 @@ def _label_bars(ax, bars, fmt='{:.3f}', fontsize=8.5, pad=0.004):
 
 
 # -------------------------
-# DR plotting functions
+# DR plotting functions (foundation models)
+# JSON keys: precision, recall, f1_score, quadratic_weighted_kappa,
+#            macro_auc, weighted_auc, Per-class AUC
 # -------------------------
 
 def plot_auc_bars(json_paths, model_names, output_dir, MODE):
@@ -223,13 +226,12 @@ def plot_all_metrics(json_paths, model_names, output_dir, MODE):
 
 # -------------------------
 # Glaucoma plotting functions
-# keys available: accuracy, balanced_accuracy, macro_f1,
-#                 sensitivity, specificity, macro_auc,
-#                 weighted_auc, per_class_auc
+# JSON keys: accuracy, balanced_accuracy, macro_f1,
+#            sensitivity, specificity, macro_auc,
+#            weighted_auc, per_class_auc
 # -------------------------
 
 def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
-    """macro auc and weighted auc side-by-side bar chart"""
     _apply_rc()
 
     metrics = ['macro_auc', 'weighted_auc']
@@ -265,7 +267,6 @@ def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
     plt.savefig(out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f'Saved: {out}')
-
 
 
 def plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE):
@@ -304,7 +305,125 @@ def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
     print(f'\nAll glaucoma plots saved to: {output_dir}')
 
 
-# Jensen - Shannon Divergence on each probability matrix for each type of model
+# -------------------------
+# ResNet50 DR plotting functions
+# JSON keys: accuracy, balanced_accuracy, macro_f1, qwk,
+#            macro_auc, weighted_auc, per_class_auc
+# Note: these keys differ from the foundation model DR JSONs which use
+# precision, recall, f1_score, quadratic_weighted_kappa — so the
+# existing plot_all_metrics cannot be reused here.
+# -------------------------
+
+def plot_resnet50_dr_auc_bars(json_paths, model_names, output_dir, MODE):
+    _apply_rc()
+
+    metrics = ['macro_auc', 'weighted_auc']
+    labels  = ['Macro AUC', 'Weighted AUC']
+    x       = np.arange(len(labels))
+    width   = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data   = _load_json(path)
+        vals   = [data[m] for m in metrics]
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+        bars   = ax.bar(x + offset, vals, width,
+                        label=model, color=color,
+                        edgecolor='black', linewidth=0.6, zorder=3)
+        _label_bars(ax, bars)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel('AUC Score')
+    ax.set_title(f'{MODE} DR Grading — Macro & Weighted AUC', pad=12)
+    ax.set_ylim(0.5, 1.05)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'resnet50_dr_auc_bar_comparison.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
+
+
+def plot_resnet50_dr_per_class_auc(json_paths, model_names, output_dir, MODE):
+    """per-class auc bar chart across all five DR grades."""
+    _apply_rc()
+
+    dr_class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    x       = np.arange(len(dr_class_names))
+    width   = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data   = _load_json(path)
+        # per_class_auc is a dict keyed by class name
+        vals   = [data['per_class_auc'].get(c) or 0.0 for c in dr_class_names]
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+        bars   = ax.bar(x + offset, vals, width,
+                        label=model, color=color,
+                        edgecolor='black', linewidth=0.6, zorder=3)
+        _label_bars(ax, bars)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(dr_class_names, rotation=30, ha='right')
+    ax.set_ylabel('AUC Score')
+    ax.set_title(f'{MODE} DR Grading — Per-Class AUC (One-vs-Rest)', pad=12)
+    ax.set_ylim(0.5, 1.05)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'resnet50_dr_per_class_auc.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
+
+
+def plot_resnet50_dr_balanced_accuracy(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'balanced_accuracy', 'Balanced Accuracy',
+                        'resnet50_dr_balanced_accuracy.png')
+
+
+def plot_resnet50_dr_macro_f1(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'macro_f1', 'Macro F1',
+                        'resnet50_dr_macro_f1.png')
+
+
+def plot_resnet50_dr_qwk(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'qwk', 'Quadratic Weighted Kappa',
+                        'resnet50_dr_qwk.png')
+
+
+def plot_all_metrics_resnet50_dr(json_paths, model_names, output_dir, MODE):
+    os.makedirs(output_dir, exist_ok=True)
+
+    plot_resnet50_dr_auc_bars(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_dr_per_class_auc(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_dr_balanced_accuracy(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_dr_macro_f1(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_dr_qwk(json_paths, model_names, output_dir, MODE)
+
+    print(f'\nAll ResNet50 DR plots saved to: {output_dir}')
+
+
+# -------------------------
+# Jensen-Shannon Divergence
+# -------------------------
 
 JS_DIVERGENCE_EPSILON = 1e-10
 
@@ -334,7 +453,6 @@ def plot_js_heatmap(js_dict, model_names, title, output_path):
         for j, b in enumerate(model_names):
             matrix[i, j] = js_dict[f"{a}_vs_{b}"]
 
-    # scale figure size with number of models so annotations don't overlap
     cell_size = 1.1
     fig_size  = max(6, n * cell_size)
     fig, ax   = plt.subplots(figsize=(fig_size, fig_size * 0.85))
@@ -343,10 +461,9 @@ def plot_js_heatmap(js_dict, model_names, title, output_path):
         matrix, annot=True, fmt=".4f",
         xticklabels=model_names, yticklabels=model_names,
         cmap="YlOrRd", ax=ax, linewidths=0.5,
-        annot_kws={"size": max(7, 10 - n)},   # shrink font as matrix grows
+        annot_kws={"size": max(7, 10 - n)},
         cbar_kws={"label": "JS Divergence"}
     )
-    # title is now passed in as a parameter — no hardcoding
     ax.set_title(title, pad=12)
     ax.set_xlabel("")
     ax.set_ylabel("")
@@ -357,62 +474,70 @@ def plot_js_heatmap(js_dict, model_names, title, output_path):
     plt.close()
     print(f"Saved: {output_path}")
 
+
 if __name__ == "__main__":
 
-    DR_NONLORA_TEST_RESULTS_DIR = "./testing/non-lora/results"
-    DR_LORA_TEST_RESULTS_DIR = "./testing/lora-based/results"
+    DR_NONLORA_TEST_RESULTS_DIR       = "./testing/non-lora/results"
+    DR_LORA_TEST_RESULTS_DIR          = "./testing/lora-based/results"
     GLAUCOMA_RESNET50_TEST_RESULTS_DIR = "./testing/results/resnet50-glaucoma"
-    GLAUCOMA_RESNET50_TEST_PLOTS_DIR = "../plots/baseline-plots/resnet50-glaucoma-testing-plots"
-    #lora_jsons = [
-    #]
+    GLAUCOMA_RESNET50_TEST_PLOTS_DIR  = "../plots/baseline-plots/resnet50-glaucoma-testing-plots"
+    DR_RESNET50_TEST_RESULTS_DIR      = "./testing/results/resnet50-dr"
+    DR_RESNET50_TEST_PLOTS_DIR        = "../plots/baseline-plots/resnet50-dr-testing-plots"
 
-    #non_lora_jsons = [
-    #]
-        
-    PROBS_DIR = "./testing/probs_numpy"
-    JS_PLOT_DIR = "../plots/js-divergence"
+    PROBS_DIR      = "./testing/probs_numpy"
+    JS_PLOT_DIR    = "../plots/js-divergence"
     JS_RESULTS_DIR = "./testing/results/js-divergence"
 
-    # need to run once else the plots will be recreated
-
-    # if os.path.exists(GLAUCOMA_RESNET50_TEST_PLOTS_DIR):
-      #  shutil.rmtree(GLAUCOMA_RESNET50_TEST_PLOTS_DIR)
-       # print(f"Removed directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
-
-    # os.makedirs(GLAUCOMA_RESNET50_TEST_PLOTS_DIR, exist_ok=True)
-    # print(f"Created directory: {GLAUCOMA_RESNET50_TEST_PLOTS_DIR}")
-
-    # resnet_50_glaucoma_jsons = [
-#        f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"
- #   ]
-
-    dr_classes = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    dr_classes       = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
     glaucoma_classes = ["Healthy", "Glaucoma"]
-    model_names = ["ResNet50"]
 
-    # glaucoma plots
-    # plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, model_names, GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
+    # -------------------------
+    # ResNet50 DR plots
+    # -------------------------
+    resnet50_dr_jsons = [
+        f"{DR_RESNET50_TEST_RESULTS_DIR}/resnet50_dr_test_results.json"
+    ]
+    resnet50_dr_model_names = ["ResNet50"]
 
-    # JS divergence — only runs if all .npy prob files exist
-    
+    if all(os.path.exists(p) for p in resnet50_dr_jsons):
+        plot_all_metrics_resnet50_dr(
+            resnet50_dr_jsons,
+            resnet50_dr_model_names,
+            DR_RESNET50_TEST_PLOTS_DIR,
+            "BASELINE"
+        )
+    else:
+        print("Skipping ResNet50 DR plots — results JSON not found.")
+
+    # -------------------------
+    # ResNet50 Glaucoma plots
+    # -------------------------
+    # resnet_50_glaucoma_jsons = [
+    #     f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"
+    # ]
+    # plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, ["ResNet50"], GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
+
+    # -------------------------
+    # JS divergence
+    # -------------------------
     dr_prob_files = {
-        "RETFound_LORA_DR": f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
+        "RETFound_LORA_DR":    f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
         "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_probs.npy",
-        "UrFound_LORA_DR": f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
-        "UrFound_NONLORA_DR": f"{PROBS_DIR}/urfound_nonlora_dr_probs.npy",
-        "CLIP_LORA_DR": f"{PROBS_DIR}/clip_dr_lora_probs.npy",
-        "CLIP_NONLORA_DR": f"{PROBS_DIR}/clip_dr_nonlora_probs.npy",
-        "ResNet50_DR": f"{PROBS_DIR}/resnet50-dr-testing.npy"
+        "UrFound_LORA_DR":     f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
+        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound_nonlora_dr_probs.npy",
+        "CLIP_LORA_DR":        f"{PROBS_DIR}/clip_dr_lora_probs.npy",
+        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip_dr_nonlora_probs.npy",
+        "ResNet50_DR":         f"{PROBS_DIR}/resnet50-dr-testing.npy",
     }
 
     glaucoma_prob_files = {
-        "RETFound_LORA_GLAUCOMA": f"{PROBS_DIR}/retfound_lora_glaucoma_probs.npy",
+        "RETFound_LORA_GLAUCOMA":    f"{PROBS_DIR}/retfound_lora_glaucoma_probs.npy",
         "RETFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/retfound_glaucoma_nonlora_probs.npy",
-        "UrFound_LORA_GLAUCOMA": f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
-        "UrFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
-        "CLIP_LORA_GLAUCOMA": f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
-        "CLIP_NONLORA_GLAUCOMA": f"{PROBS_DIR}/clip_glaucoma_nonlora_probs.npy",
-        "ResNet50_GLAUCOMA": f"{PROBS_DIR}/resnet50-glaucoma-testing-probs.npy",
+        "UrFound_LORA_GLAUCOMA":     f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
+        "UrFound_NONLORA_GLAUCOMA":  f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
+        "CLIP_LORA_GLAUCOMA":        f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
+        "CLIP_NONLORA_GLAUCOMA":     f"{PROBS_DIR}/clip_glaucoma_nonlora_probs.npy",
+        "ResNet50_GLAUCOMA":         f"{PROBS_DIR}/resnet50-glaucoma-testing-probs.npy",
     }
 
     # DR JS divergence
