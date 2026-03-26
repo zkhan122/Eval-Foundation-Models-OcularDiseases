@@ -401,7 +401,8 @@ if __name__ == "__main__":
         "UrFound_LORA_DR": f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
         "UrFound_NONLORA_DR": f"{PROBS_DIR}/urfound_nonlora_dr_probs.npy",
         "CLIP_LORA_DR": f"{PROBS_DIR}/clip_dr_lora_probs.npy",
-        "CLIP_NONLORA_DR": f"{PROBS_DIR}/clip_dr_nonlora_probs.npy"
+        "CLIP_NONLORA_DR": f"{PROBS_DIR}/clip_dr_nonlora_probs.npy",
+        "ResNet50_DR": f"{PROBS_DIR}/resnet50-dr-testing.npy"
     }
 
     glaucoma_prob_files = {
