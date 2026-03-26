@@ -15,7 +15,7 @@ from torch import nn
 from transformers import ResNetForImageClassification
 from sklearn.metrics import (
     roc_auc_score, balanced_accuracy_score, f1_score,
-    classification_report, confusion_matrix
+    classification_report, confusion_matrix, recall_score
 )
 
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
@@ -64,6 +64,10 @@ def evaluate(model, dataloader, criterion, device, threshold):
     acc      = 100.0 * (y_true == y_pred).mean()
     bal_acc  = 100.0 * balanced_accuracy_score(y_true, y_pred)
     macro_f1 = 100.0 * f1_score(y_true, y_pred, average="macro")
+    
+    recall_macro = 100.0 * recall_score(y_true, y_pred, average="macro")
+    recall_weighted = 100.0 * recall_score(y_true, y_pred, average="weighted")
+    recall_per_class = recall_score(y_true, y_pred, average=None) * 100.0
 
     class_names = ["Healthy", "Glaucoma"]
     per_class_auc = {}
@@ -99,8 +103,8 @@ def evaluate(model, dataloader, criterion, device, threshold):
     )
 
     return (avg_loss, acc, bal_acc, macro_f1,
-            per_class_auc, macro_auc, weighted_auc,
-            sensitivity, specificity, report, y_probs)
+            per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
+            sensitivity, specificity, report, y_true, y_probs)
 
 
 def main():
@@ -158,8 +162,8 @@ def main():
 
     THRESHOLD = 0.6
     (test_loss, acc, bal_acc, macro_f1,
-     per_class_auc, macro_auc, weighted_auc,
-     sensitivity, specificity, report, y_probs) = evaluate(
+     per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
+     sensitivity, specificity, report, y_true, y_probs) = evaluate(
         model, test_loader, criterion, DEVICE, THRESHOLD
     )
 
@@ -189,6 +193,12 @@ def main():
         "weighted_auc":      float(weighted_auc),
         "per_class_auc":     {k: float(v) if v is not None else None
                               for k, v in per_class_auc.items()},
+        "recall_macro":     float(recall_macro),
+        "recall_weighted":  float(recall_weighted),
+        "recall_per_class": {
+            "Healthy": float(recall_per_class[0]),
+            "Glaucoma": float(recall_per_class[1])
+        },
         "test_loss":         float(test_loss),
         "checkpoint":        os.path.basename(best_path),
         "train":             train_cfg,
@@ -205,7 +215,8 @@ def main():
         json.dump(results, f, indent=4)
 
     json_to_csv(results_path, "results/resnet50-glaucoma", "resnet50_glaucoma_results")
-
+    
+    np.save("../probs_numpy/resnet50-glaucoma-testing-true.npy", y_true)
     np.save("../probs_numpy/resnet50-glaucoma-testing.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")

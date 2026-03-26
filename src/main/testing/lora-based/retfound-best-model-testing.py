@@ -62,7 +62,7 @@ def _apply_rc():
 # Backbone loader (identical logic to training)
 # -------------------------
 def load_retfound_backbone(model):
-    checkpoint_path = f"{SRC_DIR}/best_models/best_retfound_model.pth"
+    checkpoint_path = f"{SRC_DIR}/best_models/best_retfound_lora.pth"
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     
     checkpoint_model = checkpoint["model_state_dict"]
@@ -118,7 +118,7 @@ def main():
     print(f"Test samples after pruning: {len(test_dataset)}")
 
     # ==================== LOAD CHECKPOINT ====================
-    best_path = f"{SRC_DIR}/best_models/best_retfound_model.pth"
+    best_path = f"{SRC_DIR}/best_models/best_retfound_lora.pth"
     checkpoint = torch.load(best_path, map_location="cpu", weights_only=False)
 
     # Unified checkpoint parsing (training-compatible)
@@ -133,14 +133,17 @@ def main():
     print(f"  LoRA dropout: {lora_cfg['dropout']}")
 
     # ==================== MODEL ====================
+# ==================== MODEL ====================
     model = models_vit.__dict__["vit_large_patch16"](
         num_classes=NUM_CLASSES,
         drop_path_rate=0.2,
         global_pool=True
     )
 
+    # Load backbone weights FROM .pth
     model = load_retfound_backbone(model)
 
+    # Apply LoRA AFTER loading
     peft_config = LoraConfig(
         r=lora_cfg["r"],
         lora_alpha=lora_cfg["alpha"],
@@ -151,7 +154,7 @@ def main():
     )
 
     model = get_peft_model(model, peft_config)
-    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
+
     model = model.to(DEVICE)
     model.eval()
 
@@ -173,7 +176,7 @@ def main():
         persistent_workers=True,
     )
 
-    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs = test_retfound(
+    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs = test_retfound(
         model=model,
         dataloader=test_loader,
         criterion=criterion,
@@ -228,7 +231,9 @@ def main():
         json.dump(results, f, indent=4)
 
     json_to_csv(results_path, "results/retfound", "retfound_results")
+    
 
+    np.save("../probs_numpy/retfound_dr_lora_true.npy", y_true)
     np.save("../probs_numpy/retfound_dr_lora_probs.npy", y_probs)
 
     print(f"\nResults saved to: {results_path}")

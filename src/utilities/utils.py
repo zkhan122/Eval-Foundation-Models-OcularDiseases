@@ -622,6 +622,7 @@ def test_clip(model, dataloader, criterion, device):
         per_class_auc,
         macro_auc,
         weighted_auc,
+        all_labels,
         all_probs
     )
 
@@ -810,7 +811,7 @@ def test_retfound(model, dataloader, criterion, device):
     
     generate_confusion_matrix(all_labels, all_predictions, "results/retfound", "retfound_cf")
 
-    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc, all_probabilities
+    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc, all_labels, all_probabilities
 
 
 
@@ -1018,6 +1019,7 @@ def test_urfound(model, dataloader, criterion, device):
         per_class_auc,
         macro_auc,
         weighted_auc,
+        all_labels,
         all_probs
     )
 

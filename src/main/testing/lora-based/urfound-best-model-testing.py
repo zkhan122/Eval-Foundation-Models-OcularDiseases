@@ -118,7 +118,7 @@ criterion = nn.CrossEntropyLoss()
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_probs  = test_urfound(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs  = test_urfound(
     model=model,
     dataloader=test_loader,
     criterion=criterion,
@@ -180,6 +180,8 @@ results_path = "results/urfound/urfound_test_results.json"
 with open(results_path, "w") as f:
     json.dump(results, f, indent=4)
 
+
+np.save("../probs_numpy/urfound_lora_dr_true.npy", y_true)
 np.save("../probs_numpy/urfound_lora_dr_probs.npy", y_probs)
 
 print(f"\nResults saved to: {results_path}")

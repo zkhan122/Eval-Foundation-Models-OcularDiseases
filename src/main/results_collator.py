@@ -242,22 +242,44 @@ def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
+    all_vals = []
+
     for i, (path, model) in enumerate(zip(json_paths, model_names)):
-        data   = _load_json(path)
-        vals   = [data[m] for m in metrics]
+        data = _load_json(path)
+        vals = [data[m] for m in metrics]
+
+        all_vals.extend(vals)
+
         offset = (i - (n_models - 1) / 2) * width
         color  = COLOR_MAP.get(model, f'C{i}')
-        bars   = ax.bar(x + offset, vals, width,
-                        label=model, color=color,
-                        edgecolor='black', linewidth=0.6, zorder=3)
-        _label_bars(ax, bars)
+
+        bars = ax.bar(
+            x + offset, vals, width,
+            label=model, color=color,
+            edgecolor='black', linewidth=0.6, zorder=3
+        )
+
+        # format labels correctly
+        fmt = '{:.2f}' if max(vals) > 1.5 else '{:.3f}'
+        _label_bars(ax, bars, fmt=fmt)
+
+    # 🔍 Detect scale globally
+    is_percentage = max(all_vals) > 1.5
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel('AUC Score')
+
+    if is_percentage:
+        ax.set_ylabel('AUC Score (%)')
+        ax.set_ylim(50, 105)
+        ax.yaxis.set_minor_locator(mticker.MultipleLocator(5))
+    else:
+        ax.set_ylabel('AUC Score')
+        ax.set_ylim(0.5, 1.05)
+        ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+
     ax.set_title(f'{MODE} Glaucoma — Macro & Weighted AUC', pad=12)
-    ax.set_ylim(0.5, 1.05)
-    ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.05))
+
     ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
     ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
     ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
@@ -267,7 +289,7 @@ def plot_glaucoma_auc_bars(json_paths, model_names, output_dir, MODE):
     plt.savefig(out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f'Saved: {out}')
-
+    
 
 def plot_glaucoma_balanced_accuracy(json_paths, model_names, output_dir, MODE):
     _plot_single_metric(json_paths, model_names, output_dir, MODE,
@@ -301,6 +323,7 @@ def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
     plot_glaucoma_macro_f1(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_sensitivity(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_specificity(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_glaucoma_per_class_recall(json_paths, model_names, output_dir, MODE)
 
     print(f'\nAll glaucoma plots saved to: {output_dir}')
 
@@ -418,9 +441,117 @@ def plot_all_metrics_resnet50_dr(json_paths, model_names, output_dir, MODE):
     plot_resnet50_dr_balanced_accuracy(json_paths, model_names, output_dir, MODE)
     plot_resnet50_dr_macro_f1(json_paths, model_names, output_dir, MODE)
     plot_resnet50_dr_qwk(json_paths, model_names, output_dir, MODE)
+    plot_resnet50_dr_per_class_recall(json_paths, model_names, output_dir, MODE)
 
     print(f'\nAll ResNet50 DR plots saved to: {output_dir}')
 
+def plot_resnet50_dr_per_class_recall(json_paths, model_names, output_dir, MODE):
+    """Per-class recall bar chart for DR (5 classes)."""
+    _apply_rc()
+
+    dr_class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    x        = np.arange(len(dr_class_names))
+    width    = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data = _load_json(path)
+
+        if 'recall_per_class' not in data:
+            raise KeyError(f"'recall_per_class' missing in {path}")
+
+        # values are percentages (e.g. 58.71)
+        vals = []
+        for c in dr_class_names:
+            if c not in data['recall_per_class']:
+                raise KeyError(f"Missing class '{c}' in recall_per_class ({path})")
+            vals.append(data['recall_per_class'][c])
+
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+
+        bars = ax.bar(
+            x + offset, vals, width,
+            label=model, color=color,
+            edgecolor='black', linewidth=0.6, zorder=3
+        )
+
+        _label_bars(ax, bars, fmt='{:.2f}')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(dr_class_names, rotation=30, ha='right')
+    ax.set_ylabel('Recall (%)')
+    ax.set_title(f'{MODE} DR Grading — Per-Class Recall', pad=12)
+
+    ax.set_ylim(0, 105)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(5))
+
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'resnet50_dr_per_class_recall.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
+
+
+def plot_resnet50_glaucoma_per_class_recall(json_paths, model_names, output_dir, MODE):
+    """Per-class recall bar chart for Glaucoma (Healthy vs Glaucoma)."""
+    _apply_rc()
+
+    glaucoma_class_names = ["Healthy", "Glaucoma"]
+    x        = np.arange(len(glaucoma_class_names))
+    width    = 0.22
+    n_models = len(model_names)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    for i, (path, model) in enumerate(zip(json_paths, model_names)):
+        data = _load_json(path)
+
+        if 'recall_per_class' not in data:
+            raise KeyError(f"'recall_per_class' missing in {path}")
+
+        vals = []
+        for c in glaucoma_class_names:
+            if c not in data['recall_per_class']:
+                raise KeyError(f"Missing class '{c}' in recall_per_class ({path})")
+            vals.append(data['recall_per_class'][c])
+
+        offset = (i - (n_models - 1) / 2) * width
+        color  = COLOR_MAP.get(model, f'C{i}')
+
+        bars = ax.bar(
+            x + offset, vals, width,
+            label=model, color=color,
+            edgecolor='black', linewidth=0.6, zorder=3
+        )
+
+        _label_bars(ax, bars, fmt='{:.2f}')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(glaucoma_class_names)
+    ax.set_ylabel('Recall (%)')
+    ax.set_title(f'{MODE} Glaucoma Detection — Per-Class Recall', pad=12)
+
+    ax.set_ylim(0, 105)
+    ax.yaxis.set_minor_locator(mticker.MultipleLocator(5))
+
+    ax.grid(axis='y', which='major', alpha=0.3, linewidth=0.6, zorder=0)
+    ax.grid(axis='y', which='minor', alpha=0.15, linewidth=0.4, zorder=0)
+
+    ax.legend(frameon=True, framealpha=0.9, edgecolor='#cccccc')
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'resnet50_glaucoma_per_class_recall.png')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f'Saved: {out}')
 
 # -------------------------
 # Jensen-Shannon Divergence
@@ -513,10 +644,10 @@ if __name__ == "__main__":
     # -------------------------
     # ResNet50 Glaucoma plots
     # -------------------------
-    # resnet_50_glaucoma_jsons = [
-    #     f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"
-    # ]
-    # plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, ["ResNet50"], GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
+    resnet_50_glaucoma_jsons = [
+        f"{GLAUCOMA_RESNET50_TEST_RESULTS_DIR}/resnet50_glaucoma_test_results.json"
+    ]
+    plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, ["ResNet50"], GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
 
     # -------------------------
     # JS divergence
@@ -525,9 +656,9 @@ if __name__ == "__main__":
         "RETFound_LORA_DR":    f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
         "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_probs.npy",
         "UrFound_LORA_DR":     f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
-        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound_nonlora_dr_probs.npy",
+        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound-dr-nonlora-testing.npy",
         "CLIP_LORA_DR":        f"{PROBS_DIR}/clip_dr_lora_probs.npy",
-        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip_dr_nonlora_probs.npy",
+        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip-dr-nonlora-probs.npy",
         "ResNet50_DR":         f"{PROBS_DIR}/resnet50-dr-testing.npy",
     }
 
