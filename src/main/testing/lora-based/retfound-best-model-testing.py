@@ -62,21 +62,16 @@ def _apply_rc():
 # Backbone loader (identical logic to training)
 # -------------------------
 def load_retfound_backbone(model):
-    checkpoint_path = f"{SRC_DIR}/best_models/best_retfound_lora.pth"
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    
-    checkpoint_model = checkpoint["model_state_dict"]
+    checkpoint_path = f"{SRC_DIR}/models/RETFound_MAE/weights/RETFound_cfp_weights.pth"
+    pretrained = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    checkpoint_model = pretrained["model"]
     state_dict = model.state_dict()
-
     for k in ["head.weight", "head.bias"]:
-        if k in checkpoint_model and k in state_dict:
-            if checkpoint_model[k].shape != state_dict[k].shape:
-                del checkpoint_model[k]
-
+        if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
+            del checkpoint_model[k]
     pos_embed.interpolate_pos_embed(model, checkpoint_model)
     model.load_state_dict(checkpoint_model, strict=False)
     trunc_normal_(model.head.weight, std=2e-5)
-
     return model
 
 
@@ -153,14 +148,14 @@ def main():
         r=lora_cfg["r"],
         lora_alpha=lora_cfg["alpha"],
         lora_dropout=lora_cfg["dropout"],
-        target_modules=["qkv", "proj", "fc1", "fc2"],
+        target_modules=["qkv", "proj"],
         bias="none",
         modules_to_save=["head"],
     )
 
     model = get_peft_model(model, peft_config)
     
-
+    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
 
 
     model = model.to(DEVICE)

@@ -155,38 +155,72 @@ def plot_ci(ci_all, title, path):
 
 def plot_mcnemar(mc, model_names, title, path):
     plt.rcParams.update(RC)
-    n     = len(model_names)
-    p_mat = np.ones((n, n))
-    idx   = {m: i for i, m in enumerate(model_names)}
-
-    for pair, (_, p, _, _) in mc.items():
+    n = len(model_names)
+    idx = {m: i for i, m in enumerate(model_names)}
+ 
+    # separate matrices for p-value, chi2, b01 and b10
+    # initialise p_mat to 1.0 (not significant) and the rest to 0
+    p_mat   = np.ones((n, n))
+    chi_mat = np.zeros((n, n))
+    b01_mat = np.zeros((n, n), dtype=int)
+    b10_mat = np.zeros((n, n), dtype=int)
+ 
+    for pair, (stat, p, b01, b10) in mc.items():
         a, b = pair.split("_vs_")
         if a in idx and b in idx:
-            p_mat[idx[a], idx[b]] = p
-            p_mat[idx[b], idx[a]] = p
-
+            i, j = idx[a], idx[b]
+            # McNemar is symmetric so fill both directions
+            p_mat[i, j]   = p_mat[j, i]   = p
+            chi_mat[i, j] = chi_mat[j, i] = stat
+            b01_mat[i, j] = b10_mat[j, i] = b01   # direction: A wrong B right
+            b10_mat[i, j] = b01_mat[j, i] = b10   # direction: A right B wrong
+ 
+    # build multi-line annotation for every off-diagonal cell
     annot = np.empty((n, n), dtype=object)
     for i in range(n):
         for j in range(n):
-            annot[i, j] = "" if i == j else f"{p_mat[i,j]:.3f}\n{stars(p_mat[i,j])}"
-
-    cell  = max(1.2, n * 0.85)
+            if i == j:
+                annot[i, j] = ""
+            else:
+                annot[i, j] = (
+                    f"p={p_mat[i,j]:.3f} {stars(p_mat[i,j])}\n"
+                    f"χ²={chi_mat[i,j]:.1f}\n"
+                    f"b01={b01_mat[i,j]}\n"
+                    f"b10={b10_mat[i,j]}"
+                )
+ 
+    # scale figure generously so the four-line annotations have room
+    cell  = max(1.8, n * 1.1)
     fig, ax = plt.subplots(figsize=(cell, cell))
-    sns.heatmap(p_mat, annot=annot, fmt="", mask=np.eye(n, dtype=bool),
-                xticklabels=model_names, yticklabels=model_names,
-                cmap="RdYlGn_r", vmin=0, vmax=0.1,
-                ax=ax, linewidths=0.5,
-                cbar_kws={"label": "p-value", "shrink": 0.8},
-                annot_kws={"size": max(6, 9 - n)})
-    ax.set_title(f"{title}\n* p<0.05  ** p<0.01  *** p<0.001  ns = not significant",
-                 pad=12, fontsize=10)
+ 
+    sns.heatmap(
+        p_mat,
+        annot=annot,
+        fmt="",
+        mask=np.eye(n, dtype=bool),
+        xticklabels=model_names,
+        yticklabels=model_names,
+        cmap="RdYlGn_r",
+        vmin=0,
+        vmax=0.1,
+        ax=ax,
+        linewidths=0.5,
+        cbar_kws={"label": "p-value", "shrink": 0.7},
+        annot_kws={"size": max(5, 8 - n)}   # shrink font as matrix grows
+    )
+ 
+    ax.set_title(
+        f"{title}\n"
+        f"* p<0.05  ** p<0.01  *** p<0.001  ns = not significant\n"
+        f"b01 = A wrong, B correct  |  b10 = A correct, B wrong",
+        pad=12, fontsize=9
+    )
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
     ax.tick_params(axis='y', rotation=0)
     plt.tight_layout()
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved: {path}")
-
 
 def run(model_map, task, label):
     print(f"\n{'='*60}\n{label}\n{'='*60}")

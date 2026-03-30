@@ -275,24 +275,24 @@
         "bootstrap_ci": {
             "RetFound-LoRA-DR": {
                 "Balanced Acc": {
-                    "mean": 19.55706771137195,
-                    "ci_lo": 18.71833407144352,
-                    "ci_hi": 20.471941168822763
+                    "mean": 59.78557891946753,
+                    "ci_lo": 57.95124990945776,
+                    "ci_hi": 61.66557144833952
                 },
                 "Macro F1": {
-                    "mean": 6.673575241549086,
-                    "ci_lo": 6.296237082420975,
-                    "ci_hi": 7.069145894593501
+                    "mean": 50.68128479005581,
+                    "ci_lo": 49.13883999041092,
+                    "ci_hi": 52.14408792242709
                 },
                 "Macro AUC": {
-                    "mean": 48.898365859528724,
-                    "ci_lo": 47.799797052264736,
-                    "ci_hi": 50.07265487887286
+                    "mean": 84.54490648165138,
+                    "ci_lo": 83.8381913499996,
+                    "ci_hi": 85.27144987297244
                 },
                 "QWK": {
-                    "mean": -0.04335525907743971,
-                    "ci_lo": -0.053436677580289735,
-                    "ci_hi": -0.032785755486345686
+                    "mean": 0.6646210860493593,
+                    "ci_lo": 0.6473135969837576,
+                    "ci_hi": 0.682073829949503
                 }
             },
             "RetFound-NoLoRA-DR": {
@@ -385,24 +385,24 @@
             },
             "CLIP-NoLoRA-DR": {
                 "Balanced Acc": {
-                    "mean": 13.607751790456161,
-                    "ci_lo": 12.777715812401832,
-                    "ci_hi": 14.539142455761858
+                    "mean": 57.07393673470973,
+                    "ci_lo": 55.177880111144404,
+                    "ci_hi": 58.86450092749022
                 },
                 "Macro F1": {
-                    "mean": 16.060058622355474,
-                    "ci_lo": 15.278960760668056,
-                    "ci_hi": 16.94398704636344
+                    "mean": 49.143435211452875,
+                    "ci_lo": 47.576128075971454,
+                    "ci_hi": 50.69835215873237
                 },
                 "Macro AUC": {
-                    "mean": 48.67958259100363,
-                    "ci_lo": 47.605485256057044,
-                    "ci_hi": 49.67883830482509
+                    "mean": 82.51690734761475,
+                    "ci_lo": 81.62509880805703,
+                    "ci_hi": 83.29113422503829
                 },
                 "QWK": {
-                    "mean": -0.16719125753073977,
-                    "ci_lo": -0.17953866100929783,
-                    "ci_hi": -0.15480599757053298
+                    "mean": 0.599842303845186,
+                    "ci_lo": 0.5819003728103621,
+                    "ci_hi": 0.6171568811294846
                 }
             },
             "ResNet50-DR": {
@@ -430,45 +430,45 @@
         },
         "mcnemar": {
             "RetFound-LoRA-DR_vs_RetFound-NoLoRA-DR": {
-                "chi2": 2561.098473113521,
+                "chi2": 320.2064183835182,
                 "p_value": 0.0,
-                "b01": 3961,
-                "b10": 558,
+                "b01": 812,
+                "b10": 1712,
                 "significant": true
             },
             "RetFound-LoRA-DR_vs_UrFound-LoRA-DR": {
-                "chi2": 3777.639139231194,
-                "p_value": 0.0,
-                "b01": 4985,
-                "b10": 452,
+                "chi2": 29.166295884315907,
+                "p_value": 6.642469851936283e-08,
+                "b01": 1014,
+                "b10": 784,
                 "significant": true
             },
             "RetFound-LoRA-DR_vs_UrFound-NoLoRA-DR": {
-                "chi2": 3526.0628262490677,
-                "p_value": 0.0,
-                "b01": 4857,
-                "b10": 507,
-                "significant": true
+                "chi2": 1.0052256532066508,
+                "p_value": 0.3160493479662795,
+                "b01": 1076,
+                "b10": 1029,
+                "significant": false
             },
             "RetFound-LoRA-DR_vs_CLIP-LoRA-DR": {
-                "chi2": 4098.205708495187,
+                "chi2": 153.89730372720064,
                 "p_value": 0.0,
-                "b01": 5424,
-                "b10": 497,
+                "b01": 1573,
+                "b10": 949,
                 "significant": true
             },
             "RetFound-LoRA-DR_vs_CLIP-NoLoRA-DR": {
-                "chi2": 1043.0971716605993,
-                "p_value": 0.0,
-                "b01": 2751,
-                "b10": 820,
+                "chi2": 65.12679269882659,
+                "p_value": 6.661338147750939e-16,
+                "b01": 1310,
+                "b10": 1758,
                 "significant": true
             },
             "RetFound-LoRA-DR_vs_ResNet50-DR": {
-                "chi2": 2900.5239991616013,
+                "chi2": 126.33270958083833,
                 "p_value": 0.0,
-                "b01": 4246,
-                "b10": 525,
+                "b01": 1045,
+                "b10": 1627,
                 "significant": true
             },
             "RetFound-NoLoRA-DR_vs_UrFound-LoRA-DR": {
@@ -493,10 +493,10 @@
                 "significant": true
             },
             "RetFound-NoLoRA-DR_vs_CLIP-NoLoRA-DR": {
-                "chi2": 495.15812356979404,
-                "p_value": 0.0,
-                "b01": 1449,
-                "b10": 2921,
+                "chi2": 58.65080738177624,
+                "p_value": 1.887379141862766e-14,
+                "b01": 1960,
+                "b10": 1508,
                 "significant": true
             },
             "RetFound-NoLoRA-DR_vs_ResNet50-DR": {
@@ -521,10 +521,10 @@
                 "significant": true
             },
             "UrFound-LoRA-DR_vs_CLIP-NoLoRA-DR": {
-                "chi2": 1464.9634040710264,
+                "chi2": 152.37001329787233,
                 "p_value": 0.0,
-                "b01": 1008,
-                "b10": 3610,
+                "b01": 1165,
+                "b10": 1843,
                 "significant": true
             },
             "UrFound-LoRA-DR_vs_ResNet50-DR": {
@@ -542,10 +542,10 @@
                 "significant": true
             },
             "UrFound-NoLoRA-DR_vs_CLIP-NoLoRA-DR": {
-                "chi2": 1298.406395736176,
+                "chi2": 77.49634804699905,
                 "p_value": 0.0,
-                "b01": 1042,
-                "b10": 3461,
+                "b01": 1327,
+                "b10": 1822,
                 "significant": true
             },
             "UrFound-NoLoRA-DR_vs_ResNet50-DR": {
@@ -556,10 +556,10 @@
                 "significant": true
             },
             "CLIP-LoRA-DR_vs_CLIP-NoLoRA-DR": {
-                "chi2": 1967.110745614035,
+                "chi2": 383.3693181818182,
                 "p_value": 0.0,
-                "b01": 782,
-                "b10": 3778,
+                "b01": 960,
+                "b10": 2032,
                 "significant": true
             },
             "CLIP-LoRA-DR_vs_ResNet50-DR": {
@@ -570,10 +570,10 @@
                 "significant": true
             },
             "CLIP-NoLoRA-DR_vs_ResNet50-DR": {
-                "chi2": 732.7200091575091,
-                "p_value": 0.0,
-                "b01": 3079,
-                "b10": 1289,
+                "chi2": 5.449476278496611,
+                "p_value": 0.019574193857777145,
+                "b01": 1556,
+                "b10": 1690,
                 "significant": true
             }
         }

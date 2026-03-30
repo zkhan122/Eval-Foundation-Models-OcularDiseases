@@ -26,13 +26,13 @@ class CLIPRetina(nn.Module):
         # Must be called "vision" — not vision_model
         self.vision = CLIPVisionModelWithProjection.from_pretrained(model_name)
 
-        embedding_dim = self.vision.config.projection_dim
-        self.classifier = nn.Linear(embedding_dim, num_classes)
+        embedding_dim = self.vision.config.hidden_size
+        self.classifier = nn.Sequential(nn.Linear(embedding_dim, num_classes))
 
     def forward(self, images):
         outputs = self.vision(pixel_values=images)
-        image_embeds = outputs.image_embeds
-        logits = self.classifier(image_embeds)
+        image_features = outputs.last_hidden_state[:, 0, :]
+        logits = self.classifier(image_features)
         return logits
 
 
@@ -162,15 +162,9 @@ adapted_dict = {}
 
 for key, value in checkpoint_state_dict.items():
     new_key = key
-
-    # Fix classifier Sequential → Linear mismatch
-    if key.startswith("classifier.1."):
-        new_key = key.replace("classifier.1.", "classifier.")
-
     adapted_dict[new_key] = value
 
-missing, unexpected = model.load_state_dict(adapted_dict, strict=False)
-
+model.load_state_dict(adapted_dict, strict=True)
 
 # Load the adapted state dict
 # model.load_state_dict(checkpoint_state_dict)
