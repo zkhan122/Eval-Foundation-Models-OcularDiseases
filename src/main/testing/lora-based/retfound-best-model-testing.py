@@ -143,17 +143,25 @@ def main():
     # Load backbone weights FROM .pth
     model = load_retfound_backbone(model)
 
+    for name, _ in model.named_modules():
+        if "qkv" in name or "proj" in name:
+            print(name)
+
+
     # Apply LoRA AFTER loading
     peft_config = LoraConfig(
         r=lora_cfg["r"],
         lora_alpha=lora_cfg["alpha"],
         lora_dropout=lora_cfg["dropout"],
-        target_modules=["qkv", "proj"],
+        target_modules=["qkv", "proj", "fc1", "fc2"],
         bias="none",
         modules_to_save=["head"],
     )
 
     model = get_peft_model(model, peft_config)
+    
+
+
 
     model = model.to(DEVICE)
     model.eval()
@@ -163,6 +171,12 @@ def main():
 
     print(f"\nTotal parameters: {total_params:,}")
     print(f"Trainable parameters: {trainable_params:,}")
+    
+    for name, param in model.named_parameters():
+        if "lora" in name or "head" in name:
+            param.requires_grad = True
+        if "norm" in name.lower():
+            param.requires_grad = True
 
     # ==================== EVALUATION ====================
     criterion = nn.CrossEntropyLoss()

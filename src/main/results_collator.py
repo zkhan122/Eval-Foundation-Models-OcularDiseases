@@ -623,9 +623,37 @@ if __name__ == "__main__":
     dr_classes       = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
     glaucoma_classes = ["Healthy", "Glaucoma"]
 
-    # -------------------------
+    
+    # general DR plots
+    lora_dr_jsons = [
+            f"{DR_LORA_TEST_RESULTS_DIR}/retfound/retfound_test_results.json",
+            f"{DR_LORA_TEST_RESULTS_DIR}/urfound/urfound_test_results.json",
+            f"{DR_LORA_TEST_RESULTS_DIR}/clip/clip_test_results.json",
+    ]
+
+    lora_dr_model_names = ["RETFound", "UrFound", "CLIP"]
+    lora_dr_plot_dir    = "../plots/lora-final-plots/dr"
+
+    if all(os.path.exists(p) for p in lora_dr_jsons):
+        plot_all_metrics(lora_dr_jsons, lora_dr_model_names, lora_dr_plot_dir, "LORA")
+    else:
+        missing = [p for p in lora_dr_jsons if not os.path.exists(p)]
+        print(f"Skipping LoRA DR plots — missing: {missing}")
+   
+    nonlora_dr_jsons = [                                                                                                        f"{DR_NONLORA_TEST_RESULTS_DIR}/retfound/retfound_nonlora_test_results.json",                                  f"{DR_NONLORA_TEST_RESULTS_DIR}/urfound/urfound_nonlora_test_results.json",                                    f"{DR_NONLORA_TEST_RESULTS_DIR}/clip/clip_nonlora_test_results.json",                            ]
+
+
+    nonlora_dr_model_names = ["RETFound", "UrFound", "CLIP"]
+    nonlora_dr_plot_dir    = "../plots/nonlora-final-plots/dr"
+
+    if all(os.path.exists(p) for p in nonlora_dr_jsons):
+        plot_all_metrics(nonlora_dr_jsons, nonlora_dr_model_names, nonlora_dr_plot_dir, "NON-LORA")
+    else:
+        missing = [p for p in nonlora_dr_jsons if not os.path.exists(p)]
+        print(f"Skipping non-LoRA DR plots — missing: {missing}")
+
     # ResNet50 DR plots
-    # -------------------------
+    
     resnet50_dr_jsons = [
         f"{DR_RESNET50_TEST_RESULTS_DIR}/resnet50_dr_test_results.json"
     ]
@@ -668,11 +696,12 @@ if __name__ == "__main__":
         "UrFound_LORA_GLAUCOMA":     f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
         "UrFound_NONLORA_GLAUCOMA":  f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
         "CLIP_LORA_GLAUCOMA":        f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
-        "CLIP_NONLORA_GLAUCOMA":     f"{PROBS_DIR}/clip_glaucoma_nonlora_probs.npy",
-        "ResNet50_GLAUCOMA":         f"{PROBS_DIR}/resnet50-glaucoma-testing-probs.npy",
+        "CLIP_NONLORA_GLAUCOMA":     f"{PROBS_DIR}/clip_nonlora_glaucoma_probs.npy",
+        "ResNet50_GLAUCOMA":         f"{PROBS_DIR}/resnet50_glaucoma_probs.npy",
     }
 
     # DR JS divergence
+
     if all(os.path.exists(p) for p in dr_prob_files.values()):
         probs_dict     = {name: np.load(path) for name, path in dr_prob_files.items()}
         js_results     = compute_pairwise_js(probs_dict)

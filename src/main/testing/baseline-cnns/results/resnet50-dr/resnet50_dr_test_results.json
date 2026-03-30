@@ -1,0 +1,41 @@
+{
+    "accuracy": 53.70933770184882,
+    "balanced_accuracy": 53.11698241834761,
+    "macro_f1": 43.29899321490065,
+    "qwk": 0.5904439355084345,
+    "macro_auc": 81.47043375857956,
+    "weighted_auc": 80.03378491152236,
+    "per_class_auc": {
+        "No DR": 81.5231176586868,
+        "Mild": 62.16293427410078,
+        "Moderate": 76.18773970286405,
+        "Severe": 92.87994506066218,
+        "Proliferative DR": 94.598432096584
+    },
+    "recall_macro": 53.11698241834761,
+    "recall_weighted": 53.70933770184882,
+    "recall_per_class": {
+        "No DR": 58.710217755443885,
+        "Mild": 44.74576271186441,
+        "Moderate": 32.87577213452299,
+        "Severe": 62.83524904214559,
+        "Proliferative DR": 66.4179104477612
+    },
+    "test_loss": 1.0578741978495003,
+    "checkpoint": "best_resnet50_dr_model.pth",
+    "train": {
+        "epochs": 50,
+        "lr_max": 0.0001,
+        "lr_min": 1e-06,
+        "warmup_epochs": 5,
+        "cooldown_epochs": 10,
+        "weight_decay": 0.0005,
+        "betas": [
+            0.9,
+            0.99
+        ],
+        "micro_batch": 8,
+        "grad_accum_steps": 16,
+        "effective_batch": 128
+    }
+}

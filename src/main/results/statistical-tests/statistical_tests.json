@@ -1,0 +1,16 @@
+{
+    "glaucoma": {
+        "bootstrap_ci": {},
+        "mcnemar": {}
+    },
+    "dr_grading": {
+        "bootstrap_ci": {},
+        "mcnemar": {}
+    },
+    "config": {
+        "n_bootstrap": 1000,
+        "ci": 95,
+        "alpha": 0.05,
+        "glaucoma_threshold": 0.6
+    }
+}
