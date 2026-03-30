@@ -30,17 +30,17 @@ GLAUCOMA_MODELS = {
     "UrFound-LoRA-Glaucoma":     "urfound_lora_glaucoma",
     "UrFound-NoLoRA-Glaucoma":   "urfound_nonlora_glaucoma",
     "CLIP-LoRA-Glaucoma":   "clip_lora_glaucoma",
-    "CLIP-NoLoRA-Glaucoma": "clip_glaucoma_nonlora",
+    "CLIP-NoLoRA-Glaucoma": "clip_nonlora_glaucoma",
     "ResNet50-Glaucoma":    "resnet50_glaucoma",
 }
 DR_MODELS = {
     "RetFound-LoRA-DR":     "retfound_dr_lora",
     "RetFound-NoLoRA-DR":   "retfound_dr_nonlora",
     "UrFound-LoRA-DR":     "urfound_lora_dr",
-    "UrFound-NoLoRA-DR":   "urfound_nonlora_dr",
+    "UrFound-NoLoRA-DR":   "urfound-dr-nonlora",
     "CLIP-LoRA-DR":   "clip_dr_lora",
-    "CLIP-NoLoRA-DR": "clip_dr_nonlora",
-    "ResNet50-DR":    "resnet50_dr",
+    "CLIP-NoLoRA-DR": "clip-dr-nonlora",
+    "ResNet50-DR":    "resnet50-dr",
 }
 
 
