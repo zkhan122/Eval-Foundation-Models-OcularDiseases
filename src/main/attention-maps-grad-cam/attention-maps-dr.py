@@ -39,7 +39,9 @@ PUBLICATION_RC = {
 }
 
 
+# -------------------------
 # model wrappers
+# -------------------------
 
 class CLIPRetina(nn.Module):
     def __init__(self, model_name, num_classes):
@@ -55,7 +57,9 @@ class CLIPRetina(nn.Module):
         return logits
 
 
+# -------------------------
 # model loaders
+# -------------------------
 
 def load_retfound(checkpoint_path):
     ckpt     = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -133,7 +137,9 @@ def load_clip(checkpoint_path):
     return model.eval().to(DEVICE)
 
 
+# -------------------------
 # attention rollout
+# -------------------------
 
 def attention_rollout_timm(model, image_tensor):
     attention_maps = []
@@ -207,7 +213,9 @@ def attention_rollout_clip(model, image_tensor):
     return mask
 
 
+# -------------------------
 # attention entropy
+# -------------------------
 
 def attention_entropy(mask):
     """
@@ -225,7 +233,9 @@ def attention_entropy(mask):
     return float(scipy_entropy(prob, base=2))
 
 
+# -------------------------
 # image selection
+# -------------------------
 
 def find_representative_images(models_dict, dataset):
     """
@@ -287,7 +297,9 @@ def find_representative_images(models_dict, dataset):
     return found
 
 
+# -------------------------
 # overlay util
+# -------------------------
 
 def overlay_heatmap(pil_image, mask):
     mask_resized = Image.fromarray((mask * 255).astype(np.uint8)).resize(
@@ -299,7 +311,9 @@ def overlay_heatmap(pil_image, mask):
     return blended
 
 
+# -------------------------
 # plotting
+# -------------------------
 
 def plot_attention_grid(found_images, models_dict, output_path):
     """
@@ -401,7 +415,9 @@ def plot_attention_grid(found_images, models_dict, output_path):
     print(f"Saved: {output_path}")
 
 
+# -------------------------
 # main
+# -------------------------
 
 def main():
     test_root_directories = {
@@ -453,7 +469,7 @@ def main():
         print("Could not find jointly-correct images for all DR grades. Exiting.")
         return
 
-    output_dir = "../../../plots/attention-maps"
+    output_dir = "../../plots/attention-maps"
     os.makedirs(output_dir, exist_ok=True)
 
     plot_attention_grid(
