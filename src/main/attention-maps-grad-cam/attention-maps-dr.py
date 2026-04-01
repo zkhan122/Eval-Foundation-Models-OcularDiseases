@@ -5,6 +5,9 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+from matplotlib import cm as mpl_cm
+from scipy.stats import entropy as scipy_entropy
 from PIL import Image
 from torchvision import transforms
 
@@ -36,9 +39,7 @@ PUBLICATION_RC = {
 }
 
 
-# -------------------------
 # model wrappers
-# -------------------------
 
 class CLIPRetina(nn.Module):
     def __init__(self, model_name, num_classes):
@@ -53,9 +54,8 @@ class CLIPRetina(nn.Module):
         logits = self.classifier(image_features)
         return logits
 
-# -------------------------
+
 # model loaders
-# -------------------------
 
 def load_retfound(checkpoint_path):
     ckpt     = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -117,8 +117,6 @@ def load_clip(checkpoint_path):
 
     model = CLIPRetina("openai/clip-vit-large-patch14", num_classes=NUM_CLASSES)
 
-    # set eager on every CLIPAttention layer directly
-    # the config-level flag is too late — layers are already instantiated
     from transformers.models.clip.modeling_clip import CLIPAttention
     for module in model.modules():
         if isinstance(module, CLIPAttention):
@@ -135,7 +133,7 @@ def load_clip(checkpoint_path):
     return model.eval().to(DEVICE)
 
 
-# attention rollout — ViTs
+# attention rollout
 
 def attention_rollout_timm(model, image_tensor):
     attention_maps = []
@@ -146,8 +144,6 @@ def attention_rollout_timm(model, image_tensor):
             store.append(input[0].detach().cpu())
         return hook
 
-    # disable fused attention — forces timm to use explicit softmax + attn_drop
-    # which is the path our hooks can intercept
     base = model.base_model.model
     for block in base.blocks:
         block.attn.fused_attn = False
@@ -164,7 +160,6 @@ def attention_rollout_timm(model, image_tensor):
     for h in hooks:
         h.remove()
 
-    # restore fused attention after capture
     for block in base.blocks:
         block.attn.fused_attn = True
 
@@ -187,10 +182,6 @@ def attention_rollout_timm(model, image_tensor):
 
 
 def attention_rollout_clip(model, image_tensor):
-    """
-    Attention rollout for CLIP ViT using output_attentions=True.
-    Returns (H, H) numpy array normalised 0-1.
-    """
     vision = model.base_model.model.vision
 
     with torch.no_grad():
@@ -216,11 +207,31 @@ def attention_rollout_clip(model, image_tensor):
     return mask
 
 
-# image selection - images that all the models got correct (sampling)
+# attention entropy
+
+def attention_entropy(mask):
+    """
+    Shannon entropy of an attention map in bits.
+    The map is flattened and normalised to a probability distribution
+    before computing H = -sum(p * log2(p)).
+    Higher entropy = more diffuse attention.
+    """
+    flat  = mask.flatten().astype(np.float64)
+    flat  = np.clip(flat, 0, None)
+    total = flat.sum()
+    if total == 0:
+        return 0.0
+    prob = flat / total
+    return float(scipy_entropy(prob, base=2))
+
+
+# image selection
 
 def find_representative_images(models_dict, dataset):
     """
-    for each DR grade (0-4), we find the first image correctly classified by ALL THE MODELS
+    For each DR grade (0-4), find the first image correctly classified
+    by ALL models.  Also captures per-model softmax probabilities for
+    use in the prediction confidence badges.
     """
     transform_tensor = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -236,7 +247,6 @@ def find_representative_images(models_dict, dataset):
         if not needed:
             break
 
-        # DR dataset returns (image, label) or (image, label, source)
         item       = dataset[idx]
         true_label = int(item[1])
 
@@ -248,16 +258,24 @@ def find_representative_images(models_dict, dataset):
         img_tensor = transform_tensor(pil_img).unsqueeze(0)
 
         all_correct = True
+        model_probs = {}
         for name, model in models_dict.items():
             with torch.no_grad():
                 logits    = model(img_tensor.to(DEVICE))
+                probs     = torch.softmax(logits, dim=1)[0]
                 predicted = logits.argmax(dim=1).item()
+                model_probs[name] = (predicted, float(probs[predicted]))
                 if predicted != true_label:
                     all_correct = False
                     break
 
         if all_correct:
-            found[true_label] = (img_tensor, transform_display(pil_img), image_path)
+            found[true_label] = (
+                img_tensor,
+                transform_display(pil_img),
+                image_path,
+                model_probs,   # dict: model_name -> (pred_class, pred_prob)
+            )
             needed.discard(true_label)
             print(f"Found representative image for class '{CLASS_NAMES[true_label]}': "
                   f"{os.path.basename(image_path)}")
@@ -269,8 +287,7 @@ def find_representative_images(models_dict, dataset):
     return found
 
 
-# overlay util for heatmap
-
+# overlay util
 def overlay_heatmap(pil_image, mask):
     mask_resized = Image.fromarray((mask * 255).astype(np.uint8)).resize(
         (224, 224), Image.BILINEAR
@@ -285,7 +302,14 @@ def overlay_heatmap(pil_image, mask):
 
 def plot_attention_grid(found_images, models_dict, output_path):
     """
-    Grid: rows = DR grades (0-4), columns = original image + one per model.
+    Grid: rows = DR grades (0-4), columns = original + one per model.
+
+    Each attention map cell shows:
+      - blended heatmap overlay
+      - subtitle: predicted class, correct/incorrect label, confidence %
+      - below-axes label: attention entropy in bits
+
+    A shared horizontal colorbar is added at the bottom of the figure.
     """
     plt.rcParams.update(PUBLICATION_RC)
 
@@ -299,18 +323,27 @@ def plot_attention_grid(found_images, models_dict, output_path):
     if n_rows == 1:
         axes = axes[np.newaxis, :]
 
+    # column headers (top row only)
     col_headers = ["Original"] + model_names
     for col, header in enumerate(col_headers):
         axes[0, col].set_title(header, fontsize=11, fontweight='bold', pad=6)
 
     for row, cls_idx in enumerate(class_indices):
-        img_tensor, pil_img, img_path = found_images[cls_idx]
+        img_tensor, pil_img, img_path, model_probs = found_images[cls_idx]
 
-        axes[row, 0].set_ylabel(CLASS_NAMES[cls_idx], fontsize=10,
-                                fontweight='bold', rotation=90, labelpad=8)
+        # --- original image column ---
+        axes[row, 0].set_ylabel(
+            CLASS_NAMES[cls_idx], fontsize=10,
+            fontweight='bold', rotation=90, labelpad=8,
+        )
         axes[row, 0].imshow(pil_img)
-        axes[row, 0].axis("off")
+        # use individual spine/tick removal so ylabel is preserved
+        axes[row, 0].set_xticks([])
+        axes[row, 0].set_yticks([])
+        for spine in axes[row, 0].spines.values():
+            spine.set_visible(False)
 
+        # --- attention map columns ---
         for col, (model_name, model) in enumerate(models_dict.items(), start=1):
             if model_name == "CLIP":
                 mask = attention_rollout_clip(model, img_tensor)
@@ -319,13 +352,49 @@ def plot_attention_grid(found_images, models_dict, output_path):
 
             overlay = overlay_heatmap(pil_img, mask)
             axes[row, col].imshow(overlay)
-            axes[row, col].axis("off")
+            axes[row, col].set_xticks([])
+            axes[row, col].set_yticks([])
+            for spine in axes[row, col].spines.values():
+                spine.set_visible(False)
+
+            # prediction confidence badge
+            pred_cls, pred_prob = model_probs[model_name]
+            correct    = (pred_cls == cls_idx)
+            badge_col  = "#2ecc71" if correct else "#e74c3c"
+            badge_text = "correct" if correct else "incorrect"
+            axes[row, col].set_title(
+                f"Pred: {CLASS_NAMES[pred_cls]} ({badge_text}, {pred_prob:.0%})",
+                fontsize=7.5, color=badge_col, pad=3,
+            )
+
+            # attention entropy below the subplot
+            ent = attention_entropy(mask)
+            axes[row, col].text(
+                0.5, -0.04,
+                f"H = {ent:.2f} bits",
+                transform=axes[row, col].transAxes,
+                ha="center", va="top",
+                fontsize=7, color="#444444", fontstyle="italic",
+            )
 
     plt.suptitle(
         "DR Severity Grading — Attention Rollout per Grade and Model",
-        fontsize=12, y=1.01
+        fontsize=12, y=1.01,
     )
+
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.08)   # make room for colorbar
+
+    # shared colorbar
+    norm       = Normalize(vmin=0, vmax=1)
+    scalar_map = mpl_cm.ScalarMappable(cmap="jet", norm=norm)
+    scalar_map.set_array([])
+    cbar_ax = fig.add_axes([0.12, 0.02, 0.78, 0.018])
+    cbar    = fig.colorbar(scalar_map, cax=cbar_ax, orientation="horizontal")
+    cbar.set_label("Normalised attention weight  (0 = low,  1 = high)", fontsize=8)
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.ax.tick_params(labelsize=7)
+
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved: {output_path}")
@@ -375,7 +444,7 @@ def main():
     for name, module in models_dict["RETFound"].named_modules():
         if "attn" in name.lower():
             print(f"  {name}  |  {type(module).__name__}")
-    
+
     print("\nFinding representative images (correctly classified by all models)...")
     found_images = find_representative_images(models_dict, test_dataset)
 
