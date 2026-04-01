@@ -261,6 +261,8 @@ def attention_entropy(mask):
     return float(scipy_entropy(prob, base=2))
 
 
+# image selection
+
 def find_representative_images(models_dict, dataset, threshold=0.6):
     """
     For each class, find the first image correctly classified by ALL models.
@@ -358,7 +360,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
     n_rows        = len(class_indices)
     n_cols        = 1 + len(model_names)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3.2 * n_cols, 3.5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3.2 * n_cols, 4.4 * n_rows))
 
     if n_rows == 1:
         axes = axes[np.newaxis, :]
@@ -414,11 +416,11 @@ def plot_attention_grid(found_images, models_dict, output_path):
             # attention entropy below the subplot
             ent = attention_entropy(mask)
             axes[row, col].text(
-                0.5, -0.04,
+                0.5, -0.10,
                 f"H = {ent:.2f} bits",
                 transform=axes[row, col].transAxes,
                 ha="center", va="top",
-                fontsize=7, color="#444444", fontstyle="italic",
+                fontsize=9, color="#444444", fontstyle="italic",
             )
 
     plt.suptitle(
@@ -428,7 +430,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
     )
 
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.08)   # make room for colorbar
+    plt.subplots_adjust(bottom=0.08, hspace=0.45)   # hspace separates rows; bottom makes room for colorbar
 
     # shared colorbar
     norm       = Normalize(vmin=0, vmax=1)
