@@ -7,6 +7,7 @@ import pandas as pd
 import time
 import numpy as np
 import matplotlib.ticker as mticker
+from sklearn.metrics import multilabel_confusion_matrix
 
 def load_auc_data(json_path):
     with open(json_path, 'r') as f:
@@ -105,11 +106,16 @@ def _plot_single_metric(json_paths, model_names, output_dir, MODE,
 
     y_positions = np.arange(n_models)[::-1]
 
+    # ── FIX: detect percentage scale (e.g. 73.78) vs proportion (e.g. 0.7378)
+    is_percentage = max(values) > 1.5
+    x_cap = 100.0 if is_percentage else 1.0
+    x_floor = 0.0
+
     v_min  = min(values)
     v_max  = max(values)
-    margin = max((v_max - v_min) * 0.5, 0.05)
-    x_lo   = max(0.0, v_min - margin)
-    x_hi   = min(1.0, v_max + margin)
+    margin = max((v_max - v_min) * 0.5, 0.05 * x_cap)
+    x_lo   = max(x_floor, v_min - margin)
+    x_hi   = min(x_cap,   v_max + margin)
 
     for y, model, value in zip(y_positions, model_names, values):
         color = COLOR_MAP.get(model, 'C0')
@@ -117,14 +123,18 @@ def _plot_single_metric(json_paths, model_names, output_dir, MODE,
         ax.hlines(y, x_lo, value, color=color, linewidth=2.0, alpha=0.7)
         ax.scatter(value, y, color=color, s=120, zorder=5,
                    edgecolors='white', linewidths=1.2)
-        ax.text(value + (x_hi - x_lo) * 0.018, y, f'{value:.4f}',
+        ax.text(value + (x_hi - x_lo) * 0.018, y,
+                f'{value:.2f}' if is_percentage else f'{value:.4f}',
                 va='center', ha='left', fontsize=10,
                 color=color, fontfamily='serif', fontweight='bold')
 
     ax.set_yticks(y_positions)
     ax.set_yticklabels(model_names, fontsize=11)
     ax.set_xlim(x_lo, x_hi + (x_hi - x_lo) * 0.18)
-    ax.set_xlabel(metric_display, labelpad=8)
+    ax.set_xlabel(
+        f'{metric_display} (%)' if is_percentage else metric_display,
+        labelpad=8
+    )
     ax.set_title(f'{MODE} — {metric_display}', pad=10)
     ax.grid(axis='x', alpha=0.3, linewidth=0.6)
     ax.axvline(x_lo, color='black', linewidth=0.6)
@@ -134,7 +144,6 @@ def _plot_single_metric(json_paths, model_names, output_dir, MODE,
     plt.savefig(out, dpi=300, bbox_inches='tight')
     plt.close()
     print(f'Saved: {out}')
-
 
 def _label_bars(ax, bars, fmt='{:.3f}', fontsize=8.5, pad=0.004):
     for bar in bars:
@@ -212,6 +221,15 @@ def plot_qwk(json_paths, model_names, output_dir, MODE):
                         'Quadratic Weighted Kappa', 'qwk.png')
 
 
+def plot_sensitivity(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'sensitivity', 'Sensitivity', 'sensitivity.png')
+
+
+def plot_specificity(json_paths, model_names, output_dir, MODE):
+    _plot_single_metric(json_paths, model_names, output_dir, MODE,
+                        'specificity', 'Specificity', 'specificity.png')
+
 def plot_all_metrics(json_paths, model_names, output_dir, MODE):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -220,6 +238,9 @@ def plot_all_metrics(json_paths, model_names, output_dir, MODE):
     plot_recall(json_paths, model_names, output_dir, MODE)
     plot_f1(json_paths, model_names, output_dir, MODE)
     plot_qwk(json_paths, model_names, output_dir, MODE)
+    plot_sensitivity(json_paths, model_names, output_dir, MODE)
+    plot_specificity(json_paths, model_names, output_dir, MODE)
+
 
     print(f'\nAll plots saved to: {output_dir}')
 
@@ -323,7 +344,6 @@ def plot_all_metrics_glaucoma(json_paths, model_names, output_dir, MODE):
     plot_glaucoma_macro_f1(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_sensitivity(json_paths, model_names, output_dir, MODE)
     plot_glaucoma_specificity(json_paths, model_names, output_dir, MODE)
-    plot_resnet50_glaucoma_per_class_recall(json_paths, model_names, output_dir, MODE)
 
     print(f'\nAll glaucoma plots saved to: {output_dir}')
 
@@ -607,10 +627,39 @@ def plot_js_heatmap(js_dict, model_names, title, output_path):
     print(f"Saved: {output_path}")
 
 
+def compute_and_patch_sensitivity_specificity(probs_path, true_path, json_path):
+    """
+    Computes macro sensitivity and specificity from .npy files
+    and writes them into the existing results JSON in-place.
+    Skips if both keys are already present.
+    """
+    data = _load_json(json_path)
+    if 'sensitivity' in data and 'specificity' in data:
+        print(f"Already patched: {json_path}")
+        return
+
+    probs  = np.load(probs_path)
+    labels = np.load(true_path).astype(int)
+    preds  = np.argmax(probs, axis=1)
+
+    mcm         = multilabel_confusion_matrix(labels, preds)
+    sensitivity = float(np.mean(mcm[:, 1, 1] / (mcm[:, 1, 1] + mcm[:, 1, 0] + 1e-10)))
+    specificity = float(np.mean(mcm[:, 0, 0] / (mcm[:, 0, 0] + mcm[:, 0, 1] + 1e-10)))
+
+    data['sensitivity'] = sensitivity
+    data['specificity'] = specificity
+
+    with open(json_path, 'w') as f:
+        json.dump(data, f, indent=4)
+    print(f"Patched sensitivity={sensitivity:.4f}, specificity={specificity:.4f} → {json_path}")
+
+
 if __name__ == "__main__":
 
     DR_NONLORA_TEST_RESULTS_DIR       = "./testing/non-lora/results"
     DR_LORA_TEST_RESULTS_DIR          = "./testing/lora-based/results"
+    GLAUCOMA_LORA_TEST_RESULTS_DIR = "./testing/lora-based/results"
+    GLAUCOMA_NONLORA_TEST_RESULTS_DIR = "./testing/non-lora/results"
     GLAUCOMA_RESNET50_TEST_RESULTS_DIR = "./testing/results/resnet50-glaucoma"
     GLAUCOMA_RESNET50_TEST_PLOTS_DIR  = "../plots/baseline-plots/resnet50-glaucoma-testing-plots"
     DR_RESNET50_TEST_RESULTS_DIR      = "./testing/results/resnet50-dr"
@@ -623,6 +672,77 @@ if __name__ == "__main__":
     dr_classes       = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
     glaucoma_classes = ["Healthy", "Glaucoma"]
 
+    dr_true_files = {
+        "RETFound_LORA_DR":    f"{PROBS_DIR}/retfound_dr_lora_true.npy",
+        "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_true.npy",
+        "UrFound_LORA_DR":     f"{PROBS_DIR}/urfound_lora_dr_true.npy",
+        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound-dr-nonlora_true.npy",
+        "CLIP_LORA_DR":        f"{PROBS_DIR}/clip_dr_lora_true.npy",
+        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip-dr-nonlora_true.npy",
+        "ResNet50_DR":         f"{PROBS_DIR}/resnet50-dr_true.npy",
+    }
+
+
+    dr_prob_files = {
+        "RETFound_LORA_DR":    f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
+        "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_probs.npy",
+        "UrFound_LORA_DR":     f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
+        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound-dr-nonlora_probs.npy",
+        "CLIP_LORA_DR":        f"{PROBS_DIR}/clip_dr_lora_probs.npy",
+        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip-dr-nonlora_probs.npy",
+        "ResNet50_DR":         f"{PROBS_DIR}/resnet50-dr_probs.npy",
+    }
+
+    glaucoma_prob_files = {
+        "RETFound_LORA_GLAUCOMA":    f"{PROBS_DIR}/retfound_lora_glaucoma_probs.npy",
+        "RETFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/retfound_glaucoma_nonlora_probs.npy",
+        "UrFound_LORA_GLAUCOMA":     f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
+        "UrFound_NONLORA_GLAUCOMA":  f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
+        "CLIP_LORA_GLAUCOMA":        f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
+        "CLIP_NONLORA_GLAUCOMA":     f"{PROBS_DIR}/clip_nonlora_glaucoma_probs.npy",
+        "ResNet50_GLAUCOMA":         f"{PROBS_DIR}/resnet50_glaucoma_probs.npy",
+    }
+    
+    lora_glaucoma_jsons = [
+        f"{GLAUCOMA_LORA_TEST_RESULTS_DIR}/retfound-glaucoma/retfound_glaucoma_test_results.json",
+        f"{GLAUCOMA_LORA_TEST_RESULTS_DIR}/urfound-glaucoma/urfound_glaucoma_test_results.json",
+        f"{GLAUCOMA_LORA_TEST_RESULTS_DIR}/clip-glaucoma/clip_glaucoma_test_results.json",
+    ]
+    
+    lora_glaucoma_model_names = ["RETFound", "UrFound", "CLIP"]
+    lora_glaucoma_plot_dir    = "../plots/lora-final-plots/glaucoma"
+
+    if all(os.path.exists(p) for p in lora_glaucoma_jsons):
+        plot_all_metrics_glaucoma(
+            lora_glaucoma_jsons,
+            lora_glaucoma_model_names,
+            lora_glaucoma_plot_dir,
+            "LORA"
+        )
+    else:
+        missing = [p for p in lora_glaucoma_jsons if not os.path.exists(p)]
+        print(f"Skipping LoRA glaucoma plots — missing: {missing}")
+
+
+    # ── Non-LoRA Glaucoma (foundation models) ──────────────────────────────────
+    nonlora_glaucoma_jsons = [
+        f"{GLAUCOMA_NONLORA_TEST_RESULTS_DIR}/retfound-glaucoma-nonlora/retfound_glaucoma_nonlora_test_results.json",
+        f"{GLAUCOMA_NONLORA_TEST_RESULTS_DIR}/urfound-glaucoma-nonlora/urfound_glaucoma_nonlora_test_results.json",
+        f"{GLAUCOMA_NONLORA_TEST_RESULTS_DIR}/clip-glaucoma-nonlora/clip_glaucoma_nonlora_test_results.json",
+    ]
+    nonlora_glaucoma_model_names = ["RETFound", "UrFound", "CLIP"]
+    nonlora_glaucoma_plot_dir    = "../plots/nonlora-final-plots/glaucoma"
+
+    if all(os.path.exists(p) for p in nonlora_glaucoma_jsons):
+        plot_all_metrics_glaucoma(
+            nonlora_glaucoma_jsons,
+            nonlora_glaucoma_model_names,
+            nonlora_glaucoma_plot_dir,
+            "NON-LORA"
+        )
+    else:
+        missing = [p for p in nonlora_glaucoma_jsons if not os.path.exists(p)]
+        print(f"Skipping non-LoRA glaucoma plots — missing: {missing}")
     
     # general DR plots
     lora_dr_jsons = [
@@ -631,8 +751,33 @@ if __name__ == "__main__":
             f"{DR_LORA_TEST_RESULTS_DIR}/clip/clip_test_results.json",
     ]
 
+    nonlora_dr_jsons = [f"{DR_NONLORA_TEST_RESULTS_DIR}/retfound/retfound_nonlora_test_results.json",
+                        f"{DR_NONLORA_TEST_RESULTS_DIR}/urfound/urfound_nonlora_test_results.json",
+                        f"{DR_NONLORA_TEST_RESULTS_DIR}/clip/clip_nonlora_test_results.json",
+    ]
+
     lora_dr_model_names = ["RETFound", "UrFound", "CLIP"]
     lora_dr_plot_dir    = "../plots/lora-final-plots/dr"
+
+    patch_map_lora_dr = {
+        "RETFound_LORA_DR": lora_dr_jsons[0],
+        "UrFound_LORA_DR":  lora_dr_jsons[1],
+        "CLIP_LORA_DR":     lora_dr_jsons[2],
+    }
+    patch_map_nonlora_dr = {
+        "RETFound_NONLORA_DR": nonlora_dr_jsons[0],
+        "UrFound_NONLORA_DR":  nonlora_dr_jsons[1],
+        "CLIP_NONLORA_DR":     nonlora_dr_jsons[2],
+    }
+    for key, json_path in {**patch_map_lora_dr, **patch_map_nonlora_dr}.items():
+        if os.path.exists(json_path) and os.path.exists(dr_prob_files[key]) and os.path.exists(dr_true_files[key]):
+            compute_and_patch_sensitivity_specificity(
+                dr_prob_files[key], dr_true_files[key], json_path
+            )
+        else:
+            print(f"Skipping patch for {key} — missing files")
+
+
 
     if all(os.path.exists(p) for p in lora_dr_jsons):
         plot_all_metrics(lora_dr_jsons, lora_dr_model_names, lora_dr_plot_dir, "LORA")
@@ -640,9 +785,6 @@ if __name__ == "__main__":
         missing = [p for p in lora_dr_jsons if not os.path.exists(p)]
         print(f"Skipping LoRA DR plots — missing: {missing}")
    
-    nonlora_dr_jsons = [                                                                                                        f"{DR_NONLORA_TEST_RESULTS_DIR}/retfound/retfound_nonlora_test_results.json",                                  f"{DR_NONLORA_TEST_RESULTS_DIR}/urfound/urfound_nonlora_test_results.json",                                    f"{DR_NONLORA_TEST_RESULTS_DIR}/clip/clip_nonlora_test_results.json",                            ]
-
-
     nonlora_dr_model_names = ["RETFound", "UrFound", "CLIP"]
     nonlora_dr_plot_dir    = "../plots/nonlora-final-plots/dr"
 
@@ -677,28 +819,7 @@ if __name__ == "__main__":
     ]
     plot_all_metrics_glaucoma(resnet_50_glaucoma_jsons, ["ResNet50"], GLAUCOMA_RESNET50_TEST_PLOTS_DIR, "BASELINE")
 
-    # -------------------------
     # JS divergence
-    # -------------------------
-    dr_prob_files = {
-        "RETFound_LORA_DR":    f"{PROBS_DIR}/retfound_dr_lora_probs.npy",
-        "RETFound_NONLORA_DR": f"{PROBS_DIR}/retfound_dr_nonlora_probs.npy",
-        "UrFound_LORA_DR":     f"{PROBS_DIR}/urfound_lora_dr_probs.npy",
-        "UrFound_NONLORA_DR":  f"{PROBS_DIR}/urfound-dr-nonlora_probs.npy",
-        "CLIP_LORA_DR":        f"{PROBS_DIR}/clip_dr_lora_probs.npy",
-        "CLIP_NONLORA_DR":     f"{PROBS_DIR}/clip-dr-nonlora_probs.npy",
-        "ResNet50_DR":         f"{PROBS_DIR}/resnet50-dr_probs.npy",
-    }
-
-    glaucoma_prob_files = {
-        "RETFound_LORA_GLAUCOMA":    f"{PROBS_DIR}/retfound_lora_glaucoma_probs.npy",
-        "RETFound_NONLORA_GLAUCOMA": f"{PROBS_DIR}/retfound_glaucoma_nonlora_probs.npy",
-        "UrFound_LORA_GLAUCOMA":     f"{PROBS_DIR}/urfound_lora_glaucoma_probs.npy",
-        "UrFound_NONLORA_GLAUCOMA":  f"{PROBS_DIR}/urfound_nonlora_glaucoma_probs.npy",
-        "CLIP_LORA_GLAUCOMA":        f"{PROBS_DIR}/clip_lora_glaucoma_probs.npy",
-        "CLIP_NONLORA_GLAUCOMA":     f"{PROBS_DIR}/clip_nonlora_glaucoma_probs.npy",
-        "ResNet50_GLAUCOMA":         f"{PROBS_DIR}/resnet50_glaucoma_probs.npy",
-    }
 
     # DR JS divergence
 

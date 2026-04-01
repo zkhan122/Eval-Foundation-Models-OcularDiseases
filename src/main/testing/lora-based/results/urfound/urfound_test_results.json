@@ -35,5 +35,7 @@
         "micro_batch": 8,
         "grad_accum_steps": 16,
         "effective_batch": 128
-    }
+    },
+    "sensitivity": 0.6029662421979826,
+    "specificity": 0.8935548608238764
 }
