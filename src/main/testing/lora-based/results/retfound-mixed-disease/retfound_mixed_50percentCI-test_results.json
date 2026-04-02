@@ -1,0 +1,49 @@
+{
+    "exact_match_accuracy": 0.37343554443053817,
+    "macro_auc": 0.9371176213046171,
+    "weighted_auc": 0.87622207733284,
+    "macro_f1": 0.6367357195334638,
+    "weighted_f1": 0.6730595329439099,
+    "per_class_auc": {
+        "Normal": 0.8468513178966709,
+        "Diabetes": 0.8438981929815805,
+        "Glaucoma": 0.9756103747567263,
+        "Cataract": 0.9954767944389697,
+        "AMD": 0.986705868491012,
+        "Hypertension": 0.9683696020913154,
+        "Myopia": 0.9987481806986117,
+        "Other": 0.8812806390820502
+    },
+    "per_class_f1": {
+        "Normal": 0.7526413921690491,
+        "Diabetes": 0.6014218009478673,
+        "Glaucoma": 0.5984427141268076,
+        "Cataract": 0.849112426035503,
+        "AMD": 0.6136919315403423,
+        "Hypertension": 0.2843488649940263,
+        "Myopia": 0.9090909090909091,
+        "Other": 0.4851357173632055
+    },
+    "test_loss": 0.25104909852492124,
+    "checkpoint": "best_retfound_mixed_lora_model.pth",
+    "lora": {
+        "r": 8,
+        "alpha": 32,
+        "dropout": 0.05
+    },
+    "train": {
+        "epochs": 50,
+        "lr_max": 0.0005,
+        "lr_min": 1e-06,
+        "warmup_epochs": 5,
+        "cooldown_epochs": 10,
+        "weight_decay": 0.0005,
+        "betas": [
+            0.9,
+            0.99
+        ],
+        "micro_batch": 8,
+        "grad_accum_steps": 16,
+        "effective_batch": 128
+    }
+}
