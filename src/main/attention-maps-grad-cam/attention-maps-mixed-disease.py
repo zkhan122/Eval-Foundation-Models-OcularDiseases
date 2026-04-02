@@ -226,10 +226,6 @@ def overlay_heatmap(pil_image, mask):
 # plotting
 
 def plot_attention_grid(found_images, models_dict, output_path):
-    """
-    Grid: rows = disease classes found, columns = original + one per model.
-    RETFound uses attention rollout; ResNet50 uses Grad-CAM.
-    """
     plt.rcParams.update(PUBLICATION_RC)
 
     class_indices = sorted(found_images.keys())
@@ -238,7 +234,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
     n_cols        = 1 + len(model_names)
 
     fig, axes = plt.subplots(n_rows, n_cols,
-                             figsize=(3.2 * n_cols, 3.5 * n_rows))
+                             figsize=(3.2 * n_cols, 4.0 * n_rows))
 
     if n_rows == 1:
         axes = axes[np.newaxis, :]
@@ -250,10 +246,26 @@ def plot_attention_grid(found_images, models_dict, output_path):
     for row, cls_idx in enumerate(class_indices):
         img_tensor, pil_img, img_path = found_images[cls_idx]
 
+        # row ylabel on the left
         axes[row, 0].set_ylabel(ODIR_CLASS_NAMES[cls_idx], fontsize=10,
                                 fontweight='bold', rotation=90, labelpad=8)
+
+        # original image
         axes[row, 0].imshow(pil_img)
-        axes[row, 0].axis("off")
+        axes[row, 0].set_xticks([])
+        axes[row, 0].set_yticks([])
+        for spine in axes[row, 0].spines.values():
+            spine.set_visible(False)
+
+        # class name text label beneath the original image
+        axes[row, 0].text(
+            0.5, -0.08,
+            ODIR_CLASS_NAMES[cls_idx],
+            transform=axes[row, 0].transAxes,
+            ha='center', va='top',
+            fontsize=9, fontweight='bold',
+            color='#222222', fontfamily='serif',
+        )
 
         for col, (model_name, model) in enumerate(models_dict.items(), start=1):
             if model_name == "RETFound":
@@ -265,18 +277,20 @@ def plot_attention_grid(found_images, models_dict, output_path):
 
             overlay = overlay_heatmap(pil_img, mask)
             axes[row, col].imshow(overlay)
-            axes[row, col].axis("off")
+            axes[row, col].set_xticks([])
+            axes[row, col].set_yticks([])
+            for spine in axes[row, col].spines.values():
+                spine.set_visible(False)
 
     plt.suptitle(
         "ODIR-5K Multi-Label — Attention Maps per Disease Class\n"
         "RETFound: attention rollout   |   ResNet50: Grad-CAM",
         fontsize=11, y=1.01
     )
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.02, 1, 1])
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved: {output_path}")
-
 
 # main
 
