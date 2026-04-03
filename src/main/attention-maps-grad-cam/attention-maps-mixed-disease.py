@@ -251,7 +251,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
 
     # landscape: 8 disease classes across, 3 rows deep
     fig, axes = plt.subplots(n_rows, n_cols,
-                             figsize=(3.8 * n_cols, 5.5 * n_rows))
+                             figsize=(3.8 * n_cols, 6.5 * n_rows))
 
     if n_cols == 1:
         axes = axes[:, np.newaxis]
@@ -308,7 +308,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
 
             axes[row, col].set_title(
                 badge_text,
-                fontsize=9, color=badge_col, pad=4,
+                fontsize=13, color=badge_col, pad=4,
                 linespacing=1.4,
             )
 
@@ -319,7 +319,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
                 f"H = {ent:.2f} bits",
                 transform=axes[row, col].transAxes,
                 ha='center', va='top',
-                fontsize=10, color='#444444', fontstyle='italic',
+                fontsize=13, color='#444444', fontstyle='italic',
             )
 
     plt.suptitle(
