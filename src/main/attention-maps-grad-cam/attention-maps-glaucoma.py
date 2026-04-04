@@ -360,7 +360,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
     n_rows        = len(class_indices)
     n_cols        = 1 + len(model_names)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.5 * n_cols, 6.5 * n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6.5 * n_cols, 5.5 * n_rows))
 
     if n_rows == 1:
         axes = axes[np.newaxis, :]
@@ -368,7 +368,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
     # column headers (top row only)
     col_headers = ["Original"] + model_names
     for col, header in enumerate(col_headers):
-        axes[0, col].set_title(header, fontsize=30, fontweight='bold', pad=6)
+        axes[0, col].set_title(header, fontsize=20, fontweight='bold', pad=8)
 
     for row, cls_idx in enumerate(class_indices):
         img_tensor, pil_img, img_path, model_probs = found_images[cls_idx]
@@ -402,50 +402,42 @@ def plot_attention_grid(found_images, models_dict, output_path):
             axes[row, col].set_yticks([])
             for spine in axes[row, col].spines.values():
                 spine.set_visible(False)
-
+            
             # prediction confidence badge
             pred_cls, pred_prob = model_probs[model_name]
             correct    = (pred_cls == cls_idx)
             badge_col  = "#2ecc71" if correct else "#e74c3c"
             badge_text = "correct" if correct else "incorrect"
             axes[row, col].set_title(
-                f"Pred: {CLASS_NAMES[pred_cls]} ({badge_text}, {pred_prob:.0%})",
-                fontsize=30, color=badge_col, pad=18,
+                f"{model_name}\nPred: {CLASS_NAMES[pred_cls]} ({badge_text}, {pred_prob:.0%})",
+                fontsize=9, color=badge_col, pad=3, fontweight='bold'
             )
-
             # attention entropy below the subplot
             ent = attention_entropy(mask)
             axes[row, col].text(
-                0.5, -0.22,
+                0.5, -0.10,
                 f"H = {ent:.2f} bits",
                 transform=axes[row, col].transAxes,
                 ha="center", va="top",
-                fontsize=30, color="#444444", fontstyle="italic",
+                fontsize=25, color="#444444", fontstyle="italic",
             )
 
     plt.suptitle(
         "Glaucoma Detection — Attention Maps per Class and Model\n"
         "ViT models: attention rollout   |   ResNet50: Grad-CAM",
-        fontsize=40, y=1.01,
+        fontsize=30, y=1.01,
     )
 
     plt.tight_layout()
-
-    plt.subplots_adjust(
-        left=0.18,    # prevents ylabel clipping
-        right=0.98,
-        top=0.82,     # MORE space for suptitle
-        bottom=0.14,  # MORE space for entropy + colorbar
-        hspace=0.75   # CRITICAL: separates rows
-    )
+    plt.subplots_adjust(bottom=0.08, hspace=0.45)   # hspace separates rows; bottom makes room for colorbar
 
     # shared colorbar
-    norm = Normalize(vmin=0, vmax=1)
+    norm       = Normalize(vmin=0, vmax=1)
     scalar_map = mpl_cm.ScalarMappable(cmap="jet", norm=norm)
     scalar_map.set_array([])
-    cbar_ax = fig.add_axes([0.2, 0.05, 0.6, 0.025])
-    cbar = fig.colorbar(scalar_map, cax=cbar_ax, orientation="horizontal")
-    cbar.set_label("Normalised attention weight  (0 = low,  1 = high)", fontsize=30)
+    cbar_ax = fig.add_axes([0.12, 0.02, 0.78, 0.018])
+    cbar    = fig.colorbar(scalar_map, cax=cbar_ax, orientation="horizontal")
+    cbar.set_label("Normalised attention weight  (0 = low,  1 = high)", fontsize=8)
     cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
     cbar.ax.tick_params(labelsize=7)
 
