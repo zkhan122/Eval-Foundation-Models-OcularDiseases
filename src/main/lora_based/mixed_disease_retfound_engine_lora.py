@@ -287,6 +287,15 @@ def main():
     with open(f"{SRC_DIR}/best_models/retfound-mixed-lora-benchmark.json", "w") as f:
         json.dump(benchmark, f, indent=4)
 
+
+    
+    plot_all_benchmark(
+        source     = benchmark,
+        output_dir = "../../plots/mixed-disease-odir-5k/mixed-disease-retfound-benchmark-plots",
+        skip       = 1,
+        model_name = "RetFound ODIR-5K LoRA",
+    )
+
     save_path = f"{SRC_DIR}/best_models/best_retfound_mixed_lora_model.pth"
     torch.save({
         "val_auc":          best_auc,

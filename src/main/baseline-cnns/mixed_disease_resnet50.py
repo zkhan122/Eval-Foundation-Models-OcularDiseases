@@ -264,6 +264,14 @@ def main():
     with open(f"{SRC_DIR}/best_models/resnet50-mixed-disease-benchmark.json", "w") as f:
         json.dump(benchmark, f, indent=4)
 
+
+    plot_all_benchmark(
+        source     = benchmark,
+        output_dir = "../../plots/mixed-disease-odir5k/mixed-disease-resnet50-benchmark-plots",
+        skip       = 1,
+        model_name = "Resnet50 ODIR-5K",
+    )
+
     save_path = f"{SRC_DIR}/best_models/best_resnet50_mixed_disease_model.pth"
     torch.save({
         "val_auc":          best_auc,
