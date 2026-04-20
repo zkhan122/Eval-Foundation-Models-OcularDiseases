@@ -178,51 +178,47 @@ def gradcam_retfound(model, image_tensor, target_class=None, block_idx=-1):
     cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
     return cam
  
- 
-def gradcam_clip(model, image_tensor, target_class=None, block_idx=-1):
-    """
-    gradcam for clip vision encoder
-    
-    args:
-        block_idx: which transformer block to hook (-1 = last, 12 = middle)
-    """
+
+def gradcam_clip(model, image_tensor, target_class=None, block_idx=-6):
     features  = []
     gradients = []
- 
+
     def fwd_hook(module, input, output):
-        features.append(output[0].detach())
- 
+        features.append(output[0].detach())  # attention output is tuple
+
     def bwd_hook(module, grad_input, grad_output):
         gradients.append(grad_output[0].detach())
- 
+
+    device = next(model.parameters()).device
     vision = model.base_model.model.vision
-    target_layer = vision.vision_model.encoder.layers[block_idx].layer_norm1
+
+    # Hook self_attn instead of layer_norm1
+    target_layer = vision.vision_model.encoder.layers[block_idx].self_attn
     fh = target_layer.register_forward_hook(fwd_hook)
     bh = target_layer.register_full_backward_hook(bwd_hook)
- 
+
     model.zero_grad()
-    output = model(image_tensor.to(DEVICE))
-    
+    output = model(image_tensor.to(device))
+
     if target_class is not None:
         output[0, target_class].backward()
     else:
         output[0].sum().backward()
- 
+
     fh.remove()
     bh.remove()
- 
-    feat = features[0][0, :]
-    grad = gradients[0][0, :]
-    
+
+    feat = features[0][0, 1:, :]
+    grad = gradients[0][0, 1:, :]
+
     weights = grad.mean(dim=0, keepdim=True)
     cam = (weights * feat).sum(dim=-1)
     cam = F.relu(cam).cpu().numpy()
-    
+
     n = int(len(cam) ** 0.5)
     cam = cam.reshape(n, n)
     cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
     return cam
-
 
 # Grad-CAM — ResNet50
 

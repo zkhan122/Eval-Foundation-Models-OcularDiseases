@@ -138,79 +138,100 @@ def load_clip(checkpoint_path):
 
 
 # -------------------------
-# attention rollout
+# GradCAM
 # -------------------------
 
-def attention_rollout_timm(model, image_tensor):
-    attention_maps = []
-    hooks = []
+def gradcam_retfound(model, image_tensor, target_class=None, block_idx=-6):
+    """
+    GradCAM for RETFound/UrFound (ViT-based models)
+    
+    Args:
+        block_idx: which transformer block to hook 
+                   -6 = 6th from end (good balance of localization and semantics)
+    """
+    features  = []
+    gradients = []
 
-    def make_hook(store):
-        def hook(module, input, output):
-            store.append(input[0].detach().cpu())
-        return hook
+    def fwd_hook(module, input, output):
+        features.append(output.detach())
 
-    base = model.base_model.model
-    for block in base.blocks:
-        block.attn.fused_attn = False
+    def bwd_hook(module, grad_input, grad_output):
+        gradients.append(grad_output[0].detach())
 
-    for name, module in model.named_modules():
-        if name.endswith("attn.attn_drop"):
-            hooks.append(module.register_forward_hook(make_hook(attention_maps)))
+    device = next(model.parameters()).device
+    target_layer = model.base_model.model.blocks[block_idx].norm1
+    fh = target_layer.register_forward_hook(fwd_hook)
+    bh = target_layer.register_full_backward_hook(bwd_hook)
 
-    model.train()
-    with torch.no_grad():
-        _ = model(image_tensor.to(DEVICE))
-    model.eval()
+    model.zero_grad()
+    output = model(image_tensor.to(device))
+    
+    if target_class is not None:
+        output[0, target_class].backward()
+    else:
+        output[0].sum().backward()
 
-    for h in hooks:
-        h.remove()
+    fh.remove()
+    bh.remove()
 
-    for block in base.blocks:
-        block.attn.fused_attn = True
-
-    if not attention_maps:
-        raise RuntimeError("No attention maps captured even after disabling fused attention.")
-
-    seq_len = attention_maps[0].size(-1)
-    result  = torch.eye(seq_len)
-    for attn in attention_maps:
-        attn_mean = attn[0].mean(dim=0)
-        attn_hat  = 0.5 * attn_mean + 0.5 * torch.eye(seq_len)
-        attn_hat  = attn_hat / attn_hat.sum(dim=-1, keepdim=True)
-        result    = attn_hat @ result
-
-    mask = result[0, 1:].numpy()
-    n    = int(len(mask) ** 0.5)
-    mask = mask.reshape(n, n)
-    mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-    return mask
+    feat = features[0][0, 1:, :]  # exclude CLS token
+    grad = gradients[0][0, 1:, :]
+    
+    weights = grad.mean(dim=0, keepdim=True)
+    cam = (weights * feat).sum(dim=-1)
+    cam = F.relu(cam).cpu().numpy()
+    
+    n = int(len(cam) ** 0.5)
+    cam = cam.reshape(n, n)
+    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+    return cam
 
 
-def attention_rollout_clip(model, image_tensor):
+def gradcam_clip(model, image_tensor, target_class=None, block_idx=-6):
+    """
+    GradCAM for CLIP vision encoder
+    
+    Args:
+        block_idx: which transformer layer to hook 
+                   -6 = 6th from end
+    """
+    features  = []
+    gradients = []
+
+    def fwd_hook(module, input, output):
+        features.append(output.detach())  # LayerNorm outputs tensor directly
+
+    def bwd_hook(module, grad_input, grad_output):
+        gradients.append(grad_output[0].detach())
+
+    device = next(model.parameters()).device
     vision = model.base_model.model.vision
+    target_layer = vision.vision_model.encoder.layers[block_idx].layer_norm1
+    fh = target_layer.register_forward_hook(fwd_hook)
+    bh = target_layer.register_full_backward_hook(bwd_hook)
 
-    with torch.no_grad():
-        outputs = vision(
-            pixel_values=image_tensor.to(DEVICE),
-            output_attentions=True
-        )
+    model.zero_grad()
+    output = model(image_tensor.to(device))
+    
+    if target_class is not None:
+        output[0, target_class].backward()
+    else:
+        output[0].sum().backward()
 
-    attentions = outputs.attentions
-    seq_len    = attentions[0].size(-1)
-    result     = torch.eye(seq_len)
+    fh.remove()
+    bh.remove()
 
-    for attn in attentions:
-        attn_mean = attn[0].mean(dim=0).cpu()
-        attn_hat  = 0.5 * attn_mean + 0.5 * torch.eye(seq_len)
-        attn_hat  = attn_hat / attn_hat.sum(dim=-1, keepdim=True)
-        result    = attn_hat @ result
-
-    mask = result[0, 1:].numpy()
-    n    = int(len(mask) ** 0.5)
-    mask = mask.reshape(n, n)
-    mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-    return mask
+    feat = features[0][0, 1:, :]  # exclude CLS token
+    grad = gradients[0][0, 1:, :]
+    
+    weights = grad.mean(dim=0, keepdim=True)
+    cam = (weights * feat).sum(dim=-1)
+    cam = F.relu(cam).cpu().numpy()
+    
+    n = int(len(cam) ** 0.5)
+    cam = cam.reshape(n, n)
+    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+    return cam
 
 
 # -------------------------
@@ -351,12 +372,12 @@ def plot_attention_grid(found_images, models_dict, output_path):
         for spine in axes[0, col].spines.values():
             spine.set_visible(False)
 
-        # --- one row per model ---
+        # --- one row per model (using GradCAM) ---
         for row, (model_name, model) in enumerate(models_dict.items(), start=1):
             if model_name == "CLIP":
-                mask = attention_rollout_clip(model, img_tensor)
-            else:
-                mask = attention_rollout_timm(model, img_tensor)
+                mask = gradcam_clip(model, img_tensor, target_class=cls_idx)
+            else:  # RETFound, UrFound
+                mask = gradcam_retfound(model, img_tensor, target_class=cls_idx)
 
             overlay = overlay_heatmap(pil_img, mask)
             axes[row, col].imshow(overlay)
@@ -386,7 +407,7 @@ def plot_attention_grid(found_images, models_dict, output_path):
             )
 
     plt.suptitle(
-        "DR Severity Grading — Attention Rollout per Grade and Model",
+        "DR Severity Grading — Grad-CAM per Grade and Model",
         fontsize=40, y=1.01,
     )
 
@@ -449,11 +470,6 @@ def main():
         "CLIP":     load_clip(f"{SRC_DIR}/best_models/best_clip_model.pth"),
     }
 
-    print("\nInspecting RETFound attention module names:")
-    for name, module in models_dict["RETFound"].named_modules():
-        if "attn" in name.lower():
-            print(f"  {name}  |  {type(module).__name__}")
-
     print("\nFinding representative images (correctly classified by all models)...")
     found_images = find_representative_images(models_dict, test_dataset)
 
@@ -466,7 +482,7 @@ def main():
 
     plot_attention_grid(
         found_images, models_dict,
-        os.path.join(output_dir, "dr_attention_maps.png")
+        os.path.join(output_dir, "dr_attention_maps_gradcam.png")
     )
 
 
