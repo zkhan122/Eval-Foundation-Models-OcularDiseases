@@ -94,7 +94,7 @@ def gradcam_retfound(model, image_tensor, target_class):
     def bwd_hook(module, grad_input, grad_output):
         gradients.append(grad_output[0].detach())
  
-    target_layer = model.base_model.model.blocks[-1].norm1
+    target_layer = model.base_model.model.blocks[12].norm1
     fh = target_layer.register_forward_hook(fwd_hook)
     bh = target_layer.register_full_backward_hook(bwd_hook)
  

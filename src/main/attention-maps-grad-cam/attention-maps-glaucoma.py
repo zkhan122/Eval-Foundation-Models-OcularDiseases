@@ -135,77 +135,93 @@ def load_resnet50(checkpoint_path):
 
 # attention rollout — ViTs
 
-def attention_rollout_timm(model, image_tensor):
-    attention_maps = []
-    hooks = []
-
-    def make_hook(store):
-        def hook(module, input, output):
-            store.append(input[0].detach().cpu())
-        return hook
-
-    base = model.base_model.model
-    for block in base.blocks:
-        block.attn.fused_attn = False
-
-    for name, module in model.named_modules():
-        if name.endswith("attn.attn_drop"):
-            hooks.append(module.register_forward_hook(make_hook(attention_maps)))
-
-    model.train()
-    with torch.no_grad():
-        _ = model(image_tensor.to(DEVICE))
-    model.eval()
-
-    for h in hooks:
-        h.remove()
-
-    for block in base.blocks:
-        block.attn.fused_attn = True
-
-    if not attention_maps:
-        raise RuntimeError("No attention maps captured.")
-
-    seq_len = attention_maps[0].size(-1)
-    result  = torch.eye(seq_len)
-    for attn in attention_maps:
-        attn_mean = attn[0].mean(dim=0)
-        attn_hat  = 0.5 * attn_mean + 0.5 * torch.eye(seq_len)
-        attn_hat  = attn_hat / attn_hat.sum(dim=-1, keepdim=True)
-        result    = attn_hat @ result
-
-    mask = result[0, 1:].numpy()
-    n    = int(len(mask) ** 0.5)
-    mask = mask.reshape(n, n)
-    mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-    return mask
-
-
-def attention_rollout_clip(model, image_tensor):
+def gradcam_retfound(model, image_tensor, target_class=None, block_idx=-1):
+    """
+    gradcam for retfound (vit-based)
+    
+    args:
+        block_idx: which transformer block to hook (-1 = last, 12 = middle)
+    """
+    features  = []
+    gradients = []
+ 
+    def fwd_hook(module, input, output):
+        features.append(output.detach())
+ 
+    def bwd_hook(module, grad_input, grad_output):
+        gradients.append(grad_output[0].detach())
+ 
+    target_layer = model.base_model.model.blocks[block_idx].norm1
+    fh = target_layer.register_forward_hook(fwd_hook)
+    bh = target_layer.register_full_backward_hook(bwd_hook)
+ 
+    model.zero_grad()
+    output = model(image_tensor.to(DEVICE))
+    
+    if target_class is not None:
+        output[0, target_class].backward()
+    else:
+        output[0].sum().backward()
+ 
+    fh.remove()
+    bh.remove()
+ 
+    feat = features[0][0, 1:, :]
+    grad = gradients[0][0, 1:, :]
+    
+    weights = grad.mean(dim=0, keepdim=True)
+    cam = (weights * feat).sum(dim=-1)
+    cam = F.relu(cam).cpu().numpy()
+    
+    n = int(len(cam) ** 0.5)
+    cam = cam.reshape(n, n)
+    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+    return cam
+ 
+ 
+def gradcam_clip(model, image_tensor, target_class=None, block_idx=-1):
+    """
+    gradcam for clip vision encoder
+    
+    args:
+        block_idx: which transformer block to hook (-1 = last, 12 = middle)
+    """
+    features  = []
+    gradients = []
+ 
+    def fwd_hook(module, input, output):
+        features.append(output[0].detach())
+ 
+    def bwd_hook(module, grad_input, grad_output):
+        gradients.append(grad_output[0].detach())
+ 
     vision = model.base_model.model.vision
-    vision.config._attn_implementation = "eager"
-
-    with torch.no_grad():
-        outputs = vision(
-            pixel_values=image_tensor.to(DEVICE),
-            output_attentions=True
-        )
-
-    attentions = outputs.attentions
-    seq_len    = attentions[0].size(-1)
-    result     = torch.eye(seq_len)
-
-    for attn in attentions:
-        attn_mean = attn[0].mean(dim=0).cpu()
-        attn_hat  = 0.5 * attn_mean + 0.5 * torch.eye(seq_len)
-        attn_hat  = attn_hat / attn_hat.sum(dim=-1, keepdim=True)
-        result    = attn_hat @ result
-
-    mask = result[0, 1:].numpy()
-    n    = int(len(mask) ** 0.5)
-    mask = mask.reshape(n, n)
-    mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-    return mask
+    target_layer = vision.vision_model.encoder.layers[block_idx].layer_norm1
+    fh = target_layer.register_forward_hook(fwd_hook)
+    bh = target_layer.register_full_backward_hook(bwd_hook)
+ 
+    model.zero_grad()
+    output = model(image_tensor.to(DEVICE))
+    
+    if target_class is not None:
+        output[0, target_class].backward()
+    else:
+        output[0].sum().backward()
+ 
+    fh.remove()
+    bh.remove()
+ 
+    feat = features[0][0, :]
+    grad = gradients[0][0, :]
+    
+    weights = grad.mean(dim=0, keepdim=True)
+    cam = (weights * feat).sum(dim=-1)
+    cam = F.relu(cam).cpu().numpy()
+    
+    n = int(len(cam) ** 0.5)
+    cam = cam.reshape(n, n)
+    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+    return cam
 
 
 # Grad-CAM — ResNet50
@@ -388,9 +404,9 @@ def plot_attention_grid(found_images, models_dict, output_path):
         # --- attention map columns ---
         for col, (model_name, model) in enumerate(models_dict.items(), start=1):
             if model_name in ("RETFound", "UrFound"):
-                mask = attention_rollout_timm(model, img_tensor)
+                mask = gradcam_retfound(model, img_tensor, target_class=cls_idx)
             elif model_name == "CLIP":
-                mask = attention_rollout_clip(model, img_tensor)
+                mask = gradcam_clip(model, img_tensor, target_class=cls_idx)
             elif model_name == "ResNet50":
                 mask = gradcam_resnet(model, img_tensor, target_class=cls_idx)
             else:
