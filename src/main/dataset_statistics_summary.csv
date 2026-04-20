@@ -1,0 +1,20 @@
+Task,Dataset,Split,Total,Notes
+DR Grading,DEEPDRID,Train,1200,
+DR Grading,EYEPACS,Train,63864,
+DR Grading,DDR,Train,9016,
+DR Grading,DEEPDRID,Val,400,
+DR Grading,EYEPACS,Val,17740,
+DR Grading,DDR,Val,2504,
+DR Grading,DEEPDRID,Test,400,
+DR Grading,EYEPACS,Test,7096,
+DR Grading,DDR,Test,1002,
+DR Grading,MFIDDR,LODO test,48,
+Glaucoma,G1020,Train,714,
+Glaucoma,ORIGA,Train,455,
+Glaucoma,REFUGE,Train,400,
+Glaucoma,G1020,Val,153,
+Glaucoma,ORIGA,Val,97,
+Glaucoma,REFUGE,Train only,—,Official test labels not publicly released
+Glaucoma,EYEPACS_GLAUCOMA,LODO Test,770,
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),5113,Multi-label: percentages are per-class positive rate
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),1279,Multi-label: percentages are per-class positive rate

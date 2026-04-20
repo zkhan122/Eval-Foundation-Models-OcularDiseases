@@ -1,0 +1,79 @@
+Task,Dataset,Split,Class/Grade,Count,Percentage,Total
+DR Grading,DEEPDRID,Train,Grade 0 — No DR,360,30.0,1200
+DR Grading,DEEPDRID,Train,Grade 1 — Mild,240,20.0,1200
+DR Grading,DEEPDRID,Train,Grade 2 — Moderate,240,20.0,1200
+DR Grading,DEEPDRID,Train,Grade 3 — Severe,240,20.0,1200
+DR Grading,DEEPDRID,Train,Grade 4 — Proliferative DR,120,10.0,1200
+DR Grading,EYEPACS,Train,Grade 0 — No DR,47098,73.7,63864
+DR Grading,EYEPACS,Train,Grade 1 — Mild,4409,6.9,63864
+DR Grading,EYEPACS,Train,Grade 2 — Moderate,9480,14.8,63864
+DR Grading,EYEPACS,Train,Grade 3 — Severe,1506,2.4,63864
+DR Grading,EYEPACS,Train,Grade 4 — Proliferative DR,1371,2.1,63864
+DR Grading,DDR,Train,Grade 0 — No DR,4538,50.3,9016
+DR Grading,DDR,Train,Grade 1 — Mild,448,5.0,9016
+DR Grading,DDR,Train,Grade 2 — Moderate,3216,35.7,9016
+DR Grading,DDR,Train,Grade 3 — Severe,177,2.0,9016
+DR Grading,DDR,Train,Grade 4 — Proliferative DR,637,7.1,9016
+DR Grading,DEEPDRID,Val,Grade 0 — No DR,120,30.0,400
+DR Grading,DEEPDRID,Val,Grade 1 — Mild,80,20.0,400
+DR Grading,DEEPDRID,Val,Grade 2 — Moderate,80,20.0,400
+DR Grading,DEEPDRID,Val,Grade 3 — Severe,80,20.0,400
+DR Grading,DEEPDRID,Val,Grade 4 — Proliferative DR,40,10.0,400
+DR Grading,EYEPACS,Val,Grade 0 — No DR,12993,73.2,17740
+DR Grading,EYEPACS,Val,Grade 1 — Mild,1306,7.4,17740
+DR Grading,EYEPACS,Val,Grade 2 — Moderate,2639,14.9,17740
+DR Grading,EYEPACS,Val,Grade 3 — Severe,420,2.4,17740
+DR Grading,EYEPACS,Val,Grade 4 — Proliferative DR,382,2.2,17740
+DR Grading,DDR,Val,Grade 0 — No DR,1237,49.4,2504
+DR Grading,DDR,Val,Grade 1 — Mild,130,5.2,2504
+DR Grading,DDR,Val,Grade 2 — Moderate,909,36.3,2504
+DR Grading,DDR,Val,Grade 3 — Severe,39,1.6,2504
+DR Grading,DDR,Val,Grade 4 — Proliferative DR,189,7.5,2504
+DR Grading,DEEPDRID,Test,Grade 0 — No DR,200,50.0,400
+DR Grading,DEEPDRID,Test,Grade 1 — Mild,36,9.0,400
+DR Grading,DEEPDRID,Test,Grade 2 — Moderate,72,18.0,400
+DR Grading,DEEPDRID,Test,Grade 3 — Severe,72,18.0,400
+DR Grading,DEEPDRID,Test,Grade 4 — Proliferative DR,20,5.0,400
+DR Grading,EYEPACS,Test,Grade 0 — No DR,5251,74.0,7096
+DR Grading,EYEPACS,Test,Grade 1 — Mild,490,6.9,7096
+DR Grading,EYEPACS,Test,Grade 2 — Moderate,1033,14.6,7096
+DR Grading,EYEPACS,Test,Grade 3 — Severe,161,2.3,7096
+DR Grading,EYEPACS,Test,Grade 4 — Proliferative DR,161,2.3,7096
+DR Grading,DDR,Test,Grade 0 — No DR,491,49.0,1002
+DR Grading,DDR,Test,Grade 1 — Mild,52,5.2,1002
+DR Grading,DDR,Test,Grade 2 — Moderate,352,35.1,1002
+DR Grading,DDR,Test,Grade 3 — Severe,20,2.0,1002
+DR Grading,DDR,Test,Grade 4 — Proliferative DR,87,8.7,1002
+DR Grading,MFIDDR,LODO test,Grade 0 — No DR,28,58.3,48
+DR Grading,MFIDDR,LODO test,Grade 1 — Mild,12,25.0,48
+DR Grading,MFIDDR,LODO test,Grade 2 — Moderate,0,0.0,48
+DR Grading,MFIDDR,LODO test,Grade 3 — Severe,8,16.7,48
+DR Grading,MFIDDR,LODO test,Grade 4 — Proliferative DR,0,0.0,48
+Glaucoma,G1020,Train,Healthy,507,71.0,714
+Glaucoma,G1020,Train,Glaucoma,207,29.0,714
+Glaucoma,ORIGA,Train,Healthy,337,74.1,455
+Glaucoma,ORIGA,Train,Glaucoma,118,25.9,455
+Glaucoma,REFUGE,Train,Healthy,360,90.0,400
+Glaucoma,REFUGE,Train,Glaucoma,40,10.0,400
+Glaucoma,G1020,Val,Healthy,108,70.6,153
+Glaucoma,G1020,Val,Glaucoma,45,29.4,153
+Glaucoma,ORIGA,Val,Healthy,72,74.2,97
+Glaucoma,ORIGA,Val,Glaucoma,25,25.8,97
+Glaucoma,EYEPACS_GLAUCOMA,LODO Test,Healthy,385,50.0,770
+Glaucoma,EYEPACS_GLAUCOMA,LODO Test,Glaucoma,385,50.0,770
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Normal,2304,45.1,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Diabetes,1275,24.9,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Glaucoma,223,4.4,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Cataract,235,4.6,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),AMD,220,4.3,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Hypertension,100,2.0,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Myopia,184,3.6,5113
+Multi-Label (ODIR-5K),ODIR-5K,Train (80%),Other,572,11.2,5113
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Normal,569,44.5,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Diabetes,333,26.0,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Glaucoma,61,4.8,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Cataract,58,4.5,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),AMD,46,3.6,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Hypertension,28,2.2,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Myopia,48,3.8,1279
+Multi-Label (ODIR-5K),ODIR-5K,Val/Test (20%),Other,136,10.6,1279
