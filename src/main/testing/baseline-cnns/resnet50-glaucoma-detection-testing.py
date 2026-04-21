@@ -15,7 +15,7 @@ from torch import nn
 from transformers import ResNetForImageClassification
 from sklearn.metrics import (
     roc_auc_score, balanced_accuracy_score, f1_score,
-    classification_report, confusion_matrix, recall_score
+    classification_report, confusion_matrix, recall_score, precision_score
 )
 
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
@@ -68,7 +68,7 @@ def evaluate(model, dataloader, criterion, device, threshold):
     recall_macro = 100.0 * recall_score(y_true, y_pred, average="macro")
     recall_weighted = 100.0 * recall_score(y_true, y_pred, average="weighted")
     recall_per_class = recall_score(y_true, y_pred, average=None) * 100.0
-
+    precision = precision_score(y_true, y_pred)
     class_names = ["Healthy", "Glaucoma"]
     per_class_auc = {}
     for k, name in enumerate(class_names):
@@ -102,7 +102,7 @@ def evaluate(model, dataloader, criterion, device, threshold):
         zero_division=0
     )
 
-    return (avg_loss, acc, bal_acc, macro_f1,
+    return (avg_loss, acc, bal_acc, macro_f1, precision,
             per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
             sensitivity, specificity, report, y_true, y_probs)
 
@@ -161,7 +161,7 @@ def main():
     )
 
     THRESHOLD = 0.6
-    (test_loss, acc, bal_acc, macro_f1,
+    (test_loss, acc, bal_acc, macro_f1, precision,
      per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
      sensitivity, specificity, report, y_true, y_probs) = evaluate(
         model, test_loader, criterion, DEVICE, THRESHOLD
@@ -172,6 +172,7 @@ def main():
     print(f"accuracy         : {acc:.2f}%")
     print(f"balanced accuracy: {bal_acc:.2f}%")
     print(f"macro f1         : {macro_f1:.2f}%")
+    print("Precision : {precision:.2f}%")
     print(f"sensitivity      : {sensitivity:.2f}%")
     print(f"specificity      : {specificity:.2f}%")
     print(f"macro auc        : {macro_auc:.2f}%")
@@ -187,6 +188,7 @@ def main():
         "accuracy":          float(acc),
         "balanced_accuracy": float(bal_acc),
         "macro_f1":          float(macro_f1),
+        "precision":         float(precision),
         "sensitivity":       float(sensitivity),
         "specificity":       float(specificity),
         "macro_auc":         float(macro_auc),

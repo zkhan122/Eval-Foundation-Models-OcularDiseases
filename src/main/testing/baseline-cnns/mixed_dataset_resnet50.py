@@ -13,7 +13,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from torch import nn
 from transformers import ResNetForImageClassification
-from sklearn.metrics import roc_auc_score, f1_score, classification_report
+from sklearn.metrics import roc_auc_score, f1_score, classification_report, precision_score
 
 from data_processing.mixed_dataset import ODIRDataset, ODIR_CLASS_NAMES, NUM_CLASSES
 from utilities.utils import json_to_csv
@@ -47,7 +47,7 @@ def evaluate(model, dataloader, criterion, device):
 
     probs  = np.concatenate(all_logits, axis=0)   # (N, 8)
     labels = np.concatenate(all_labels, axis=0)   # (N, 8)
-    preds  = (probs >= 0.3).astype(int)
+    preds  = (probs >= 0.5).astype(int)
 
     avg_loss = total_loss / len(dataloader)
 
@@ -75,6 +75,24 @@ def evaluate(model, dataloader, criterion, device):
 
     # exact match accuracy (all 8 labels correct for a sample)
     exact_match = float((preds == labels.astype(int)).all(axis=1).mean())
+    
+    precision = precision_score(labels, preds, average="weighted", zero_division=0)
+    
+    report_dict = classification_report(
+        labels, preds,
+        target_names=ODIR_CLASS_NAMES,
+        output_dict=True,
+        zero_division=0
+    )
+
+    per_class_recall = {
+        name: report_dict[name]["recall"]
+        for name in ODIR_CLASS_NAMES
+    }
+    per_class_precision = {
+        name: report_dict[name]["precision"]
+        for name in ODIR_CLASS_NAMES
+    }
 
     report = classification_report(
         labels, preds,
@@ -83,8 +101,8 @@ def evaluate(model, dataloader, criterion, device):
         zero_division=0
     )
 
-    return (avg_loss, exact_match, macro_auc, weighted_auc,
-            per_class_auc, macro_f1, weighted_f1, per_class_f1,
+    return (avg_loss, exact_match, macro_auc, weighted_auc, precision,
+            per_class_recall, per_class_precision, per_class_auc, macro_f1, weighted_f1, per_class_f1,
             report, labels, probs)
 
 
@@ -131,7 +149,7 @@ def main():
     )
 
     # evaluation
-    (test_loss, exact_match, macro_auc, weighted_auc,
+    (test_loss, exact_match, macro_auc, weighted_auc, precision, per_class_recall, per_class_precision,
      per_class_auc, macro_f1, weighted_f1, per_class_f1,
      report, y_true, y_probs) = evaluate(model, test_loader, criterion, DEVICE)
 
@@ -140,6 +158,7 @@ def main():
     print(f"exact match accuracy : {exact_match*100:.2f}%")
     print(f"macro AUC            : {macro_auc:.4f}")
     print(f"weighted AUC         : {weighted_auc:.4f}")
+    print(f"Precision: {precision:.4f}")
     print(f"macro F1             : {macro_f1:.4f}")
     print(f"weighted F1          : {weighted_f1:.4f}")
     print(f"loss                 : {test_loss:.4f}")
@@ -157,6 +176,9 @@ def main():
         "exact_match_accuracy": float(exact_match),
         "macro_auc":            float(macro_auc),
         "weighted_auc":         float(weighted_auc),
+        "precision": float(precision),
+        "per_class_recall": per_class_recall,
+        "per_class_precision": per_class_precision,
         "macro_f1":             float(macro_f1),
         "weighted_f1":          float(weighted_f1),
         "per_class_auc":        {k: float(v) if v is not None else None

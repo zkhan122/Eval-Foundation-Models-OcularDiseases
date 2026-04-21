@@ -155,7 +155,7 @@ class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
 
 roc_save_path = os.path.join("./results/clip", "clip_lora_roc_data.json")
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs = test_clip(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, per_class_recall, per_class_precision, y_true, y_probs = test_clip(
     model, test_loader, criterion, DEVICE)
 
 
@@ -207,6 +207,8 @@ results = {
     "Per-class AUC": per_class_auc_list,
     "macro_auc": float(macro_auc),
     "weighted_auc": float(weighted_auc),
+    "per_class_recall": per_class_recall,
+    "per_class_precision": per_class_precision,
     "training_validation_accuracy": float(val_bal_acc),
     "checkpoint": os.path.basename(checkpoint_path),
     "lora": lora_cfg,

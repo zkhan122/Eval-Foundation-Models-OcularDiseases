@@ -185,7 +185,7 @@ def main():
         persistent_workers=True,
     )
 
-    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs = test_retfound(
+    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, per_class_recall, per_class_precision, y_true, y_probs = test_retfound(
         model=model,
         dataloader=test_loader,
         criterion=criterion,
@@ -223,6 +223,8 @@ def main():
         "Per-class AUC": per_class_auc_list,
         "macro_auc": float(macro_auc),
         "weighted_auc": float(weighted_auc),
+        "per_class_recall": per_class_recall,
+        "per_class_precision": per_class_precision,
         "checkpoint": os.path.basename(best_path),
         "lora": lora_cfg,
         "train": train_cfg,

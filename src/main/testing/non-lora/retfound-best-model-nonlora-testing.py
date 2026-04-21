@@ -156,7 +156,7 @@ def main():
         persistent_workers=True,
     )
 
-    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs = test_retfound(
+    test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, per_class_recall, per_class_precision, y_true, y_probs = test_retfound(
         model=model,
         dataloader=test_loader,
         criterion=criterion,
@@ -193,6 +193,8 @@ def main():
         "quadratic_weighted_kappa": float(qwk),
         "Per-class AUC": per_class_auc_list,
         "macro_auc": float(macro_auc),
+        "per_class_recall": per_class_recall,
+        "per_class_precision": per_class_precision,
         "weighted_auc": float(weighted_auc),
         "checkpoint": os.path.basename(best_path),
         "train": train_cfg,

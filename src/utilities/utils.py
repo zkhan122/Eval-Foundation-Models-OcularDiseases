@@ -611,7 +611,22 @@ def test_clip(model, dataloader, criterion, device):
     except ValueError:
         weighted_auc = float("nan")
     
-    
+    from sklearn.metrics import classification_report
+    report_dict = classification_report(
+        all_labels, all_predictions,
+        target_names=["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"],
+        output_dict=True,
+        zero_division=0
+    )
+    per_class_recall = {
+        name: report_dict[name]["recall"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
+    per_class_precision = {
+        name: report_dict[name]["precision"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
+
     return (
         val_loss,
         val_acc,
@@ -622,6 +637,8 @@ def test_clip(model, dataloader, criterion, device):
         per_class_auc,
         macro_auc,
         weighted_auc,
+        per_class_recall,
+        per_class_precision,
         all_labels,
         all_probs
     )
@@ -810,8 +827,24 @@ def test_retfound(model, dataloader, criterion, device):
 
     
     generate_confusion_matrix(all_labels, all_predictions, "results/retfound", "retfound_cf")
+    
+    from sklearn.metrics import classification_report
+    report_dict = classification_report(
+        all_labels, all_predictions,
+        target_names=["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"],
+        output_dict=True,
+        zero_division=0
+    )
+    per_class_recall = {
+        name: report_dict[name]["recall"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
+    per_class_precision ={
+        name: report_dict[name]["precision"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
 
-    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc, all_labels, all_probabilities
+    return val_loss, val_acc, precision, recall, f1, quadratic_weighted_kappa, per_class_auc, macro_auc, weighted_auc,per_class_recall, per_class_precision, all_labels, all_probabilities
 
 
 
@@ -1009,6 +1042,23 @@ def test_urfound(model, dataloader, criterion, device):
     except ValueError:
         weighted_auc = float("nan")
 
+
+    from sklearn.metrics import classification_report
+    report_dict = classification_report(
+        all_labels, all_predictions,
+        target_names=["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"],
+        output_dict=True,
+        zero_division=0
+    )
+    per_class_recall = {
+        name: report_dict[name]["recall"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
+    per_class_precision = {
+        name: report_dict[name]["precision"]
+        for name in ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+    }
+
     return (
         val_loss,
         val_acc,
@@ -1019,6 +1069,8 @@ def test_urfound(model, dataloader, criterion, device):
         per_class_auc,
         macro_auc,
         weighted_auc,
+        per_class_recall,
+        per_class_precision,
         all_labels,
         all_probs
     )

@@ -92,16 +92,26 @@ def evaluate(model, dataloader, criterion, device):
     # exact match accuracy (all 8 labels correct)
     exact_match = float((preds == labels.astype(int)).all(axis=1).mean())
 
-    report = classification_report(
+    report_dict = classification_report(
         labels, preds,
         target_names=ODIR_CLASS_NAMES,
-        digits=4,
+        output_dict=True,
         zero_division=0
     )
+    
+    per_class_recall = {
+        name: report_dict[name]["recall"]
+        for name in ODIR_CLASS_NAMES
+    }
+    
+    per_class_precision = {
+        name: report_dict[name]["precision"]
+        for name in ODIR_CLASS_NAMES
+    }
 
     return (avg_loss, exact_match, macro_auc, weighted_auc,
             per_class_auc, macro_f1, weighted_f1, per_class_f1,
-            report, labels, probs)
+            per_class_recall, per_class_precision, report_dict, labels, probs)
 
 
 def main():
@@ -158,7 +168,7 @@ def main():
 
     # eval
     (test_loss, exact_match, macro_auc, weighted_auc,
-     per_class_auc, macro_f1, weighted_f1, per_class_f1,
+     per_class_auc, macro_f1, weighted_f1, per_class_f1, per_class_recall, per_class_precision,
      report, y_true, y_probs) = evaluate(model, test_loader, criterion, DEVICE)
 
     print("\nFINAL TEST RESULTS")
@@ -188,6 +198,8 @@ def main():
                                  for k, v in per_class_auc.items()},
         "per_class_f1":         per_class_f1,
         "test_loss":            float(test_loss),
+        "per_class_recall": per_class_recall,
+        "per_class_precision": per_class_precision,
         "checkpoint":           os.path.basename(best_path),
         "lora":                 lora_cfg,
         "train":                train_cfg,

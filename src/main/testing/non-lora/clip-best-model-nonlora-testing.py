@@ -187,7 +187,7 @@ criterion = nn.CrossEntropyLoss()
 test_loader = DataLoader(test_dataset, batch_size=MICRO_BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
 
-test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, y_true, y_probs = test_clip(
+test_loss, test_acc, precision, recall, f1, qwk, per_class_auc, macro_auc, weighted_auc, per_class_recall, per_class_precision, y_true, y_probs = test_clip(
     model, test_loader, criterion, DEVICE
 )
 
@@ -239,6 +239,8 @@ results = {
     "Per-class AUC": per_class_auc_list,
     "macro_auc": float(macro_auc),
     "weighted_auc": float(weighted_auc),
+    "per_class_recall": per_class_recall,
+    "per_class_precision": per_class_precision,
     "training_validation_accuracy": float(val_bal_acc),
     "checkpoint": os.path.basename(checkpoint_path),
     "train": train_cfg

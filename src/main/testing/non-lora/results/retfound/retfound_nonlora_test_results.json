@@ -13,6 +13,20 @@
         0.942544615650907
     ],
     "macro_auc": 0.7690728725193553,
+    "per_class_recall": {
+        "No DR": 0.5440536013400336,
+        "Mild": 0.3525423728813559,
+        "Moderate": 0.34934797529169526,
+        "Severe": 0.4827586206896552,
+        "Proliferative DR": 0.6753731343283582
+    },
+    "per_class_precision": {
+        "No DR": 0.8414507772020725,
+        "Mild": 0.10121654501216545,
+        "Moderate": 0.3294498381877023,
+        "Severe": 0.20554649265905384,
+        "Proliferative DR": 0.38266384778012685
+    },
     "weighted_auc": 0.7494267767359483,
     "checkpoint": "best_retfound_nonlora_model.pth",
     "train": {
@@ -29,7 +43,5 @@
         "micro_batch": 8,
         "grad_accum_steps": 16,
         "effective_batch": 128
-    },
-    "sensitivity": 0.48081514090611366,
-    "specificity": 0.8580146929874399
+    }
 }

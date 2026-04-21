@@ -25,6 +25,26 @@
         "Other": 0.3888888888888889
     },
     "test_loss": 0.2895939604379237,
+    "per_class_recall": {
+        "Normal": 0.8242530755711776,
+        "Diabetes": 0.7507507507507507,
+        "Glaucoma": 0.7704918032786885,
+        "Cataract": 0.896551724137931,
+        "AMD": 0.782608695652174,
+        "Hypertension": 0.6785714285714286,
+        "Myopia": 0.9583333333333334,
+        "Other": 0.6691176470588235
+    },
+    "per_class_precision": {
+        "Normal": 0.6550279329608939,
+        "Diabetes": 0.4752851711026616,
+        "Glaucoma": 0.3790322580645161,
+        "Cataract": 0.65,
+        "AMD": 0.34951456310679613,
+        "Hypertension": 0.12179487179487179,
+        "Myopia": 0.7931034482758621,
+        "Other": 0.2740963855421687
+    },
     "checkpoint": "best_retfound_mixed_lora_model.pth",
     "lora": {
         "r": 8,

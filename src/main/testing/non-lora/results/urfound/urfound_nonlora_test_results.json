@@ -14,6 +14,20 @@
     ],
     "macro_auc": 0.8449997565465616,
     "weighted_auc": 0.8279453564920234,
+    "per_class_recall": {
+        "No DR": 0.6654941373534339,
+        "Mild": 0.42033898305084744,
+        "Moderate": 0.42210020590253944,
+        "Severe": 0.6896551724137931,
+        "Proliferative DR": 0.7574626865671642
+    },
+    "per_class_precision": {
+        "No DR": 0.8817132711939636,
+        "Mild": 0.12525252525252525,
+        "Moderate": 0.528804815133276,
+        "Severe": 0.36511156186612576,
+        "Proliferative DR": 0.5024752475247525
+    },
     "training_validation_accuracy": 58.393053770548676,
     "checkpoint": "best_urfound_nonlora_model.pth",
     "train": {
@@ -30,7 +44,5 @@
         "micro_batch": 8,
         "grad_accum_steps": 16,
         "effective_batch": 128
-    },
-    "sensitivity": 0.591010237057424,
-    "specificity": 0.8872059033873378
+    }
 }

@@ -15,7 +15,7 @@ from torch import nn
 from transformers import ResNetForImageClassification
 from sklearn.metrics import (
     roc_auc_score, balanced_accuracy_score, f1_score,
-    classification_report, cohen_kappa_score, recall_score
+    classification_report, cohen_kappa_score, recall_score, precision_score
 )
 
 from data_processing.dataset import CombinedDRDataSet
@@ -68,10 +68,11 @@ def evaluate(model, dataloader, criterion, device):
     bal_acc  = 100.0 * balanced_accuracy_score(y_true, y_pred)
     macro_f1 = 100.0 * f1_score(y_true, y_pred, average="macro")
     qwk      = cohen_kappa_score(y_true, y_pred, weights="quadratic")
+    precision = precision_score(y_true, y_pred, average="weighted")
     recall_macro    = 100.0 * recall_score(y_true, y_pred, average="macro")
     recall_weighted = 100.0 * recall_score(y_true, y_pred, average="weighted")
     recall_per_class = recall_score(y_true, y_pred, average=None) * 100.0
-
+        
     # per-class auc using one-vs-rest
     per_class_auc = {}
     for k, name in enumerate(DR_CLASS_NAMES):
@@ -98,7 +99,7 @@ def evaluate(model, dataloader, criterion, device):
         zero_division=0
     )
 
-    return (avg_loss, acc, bal_acc, macro_f1, qwk,
+    return (avg_loss, acc, bal_acc, macro_f1, precision, qwk,
             per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
             report, y_true, y_probs)
 
@@ -163,7 +164,7 @@ def main():
         persistent_workers=True,
     )
 
-    (test_loss, acc, bal_acc, macro_f1, qwk,
+    (test_loss, acc, bal_acc, macro_f1, precision, qwk,
      per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
      report, y_true, y_probs) = evaluate(model, test_loader, criterion, DEVICE)
 
@@ -171,6 +172,7 @@ def main():
     print("=" * 50)
     print(f"accuracy         : {acc:.2f}%")
     print(f"balanced accuracy: {bal_acc:.2f}%")
+    print(f"Precision: {precision:.2f}%")
     print(f"macro f1         : {macro_f1:.2f}%")
     print(f"qwk              : {qwk:.4f}")
     print(f"macro auc        : {macro_auc:.2f}%")
@@ -186,6 +188,7 @@ def main():
         "accuracy":          float(acc),
         "balanced_accuracy": float(bal_acc),
         "macro_f1":          float(macro_f1),
+        "precision":         float(precision),
         "qwk":               float(qwk),
         "macro_auc":         float(macro_auc),
         "weighted_auc":      float(weighted_auc),
