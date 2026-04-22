@@ -19,7 +19,7 @@ from data_processing.dataset import CombinedDRDataSet
 from utilities.utils import (
     identity_transform,
     test_retfound,
-    json_to_csv,
+    json_to_csv, plot_confusion_matrix_with_ci
 )
 
 
@@ -219,10 +219,23 @@ def main():
     
     np.save("../probs_numpy/retfound_dr_nonlora_true.npy", y_true)
     np.save("../probs_numpy/retfound_dr_nonlora_probs.npy", y_probs)
+    
+    y_pred = np.argmax(y_probs, axis=1)
+    class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+
+    plot_confusion_matrix_with_ci(
+        y_true      = y_true,
+        y_pred      = y_pred,
+        class_names = class_names,
+        title       = "CLIP-LoRA DR Grading",
+        save_path   = "../../../plots/confusion_matrices/non-lora/retfound_cf.png",
+    )
 
     print(f"\nResults saved to: {results_path}")
     print("=" * 70)
 
+
+    
 
 if __name__ == "__main__":
     main()

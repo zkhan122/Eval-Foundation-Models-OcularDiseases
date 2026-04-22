@@ -113,6 +113,103 @@ def class_balanced_weights(class_counts, beta, device):
     return weights
 
 
+def wilson_ci(k: int, n: int, z: float = 1.96):
+    """
+    Wilson score interval for k successes in n trials.
+    Returns (lower, upper) clipped to [0, 1].
+    """
+    if n == 0:
+        return 0.0, 0.0
+    p_hat = k / n
+    centre = (p_hat + z**2 / (2 * n)) / (1 + z**2 / n)
+    margin = (z / (1 + z**2 / n)) * np.sqrt(p_hat * (1 - p_hat) / n + z**2 / (4 * n**2))
+    return float(np.clip(centre - margin, 0, 1)), float(np.clip(centre + margin, 0, 1))
+ 
+def plot_confusion_matrix_with_ci(
+    y_true,
+    y_pred,
+    class_names,
+    title: str = "Confusion Matrix",
+    save_path: str = None,
+    figsize: tuple = (8, 7),
+    cmap_name: str = "viridis",
+    show: bool = True,
+):
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    n_classes = len(class_names)
+
+    cm_counts = confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+
+    row_sums = cm_counts.sum(axis=1, keepdims=True)
+    row_sums_safe = np.where(row_sums == 0, 1, row_sums)
+    cm_norm = cm_counts / row_sums_safe
+
+    ci_low  = np.zeros((n_classes, n_classes))
+    ci_high = np.zeros((n_classes, n_classes))
+
+    for i in range(n_classes):
+        n_row = int(row_sums[i])
+        for j in range(n_classes):
+            lo, hi = wilson_ci(int(cm_counts[i, j]), n_row)
+            ci_low[i, j]  = lo
+            ci_high[i, j] = hi
+
+    fig, ax = plt.subplots(figsize=figsize)
+    cmap = plt.get_cmap(cmap_name)
+    im = ax.imshow(cm_norm, vmin=0.0, vmax=1.0, cmap=cmap, aspect="auto")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Normalised Scale", fontsize=10)
+
+    for i in range(n_classes):
+        for j in range(n_classes):
+            val  = cm_norm[i, j]
+            lo   = ci_low[i, j]
+            hi   = ci_high[i, j]
+
+            brightness = (
+                0.299 * cmap(val)[0]
+                + 0.587 * cmap(val)[1]
+                + 0.114 * cmap(val)[2]
+            )
+            text_color = "white" if brightness < 0.55 else "black"
+
+            ax.text(
+                j, i - 0.10,
+                f"{val:.2f}",
+                ha="center", va="center",
+                fontsize=11, fontweight="bold",
+                color=text_color,
+            )
+            ax.text(
+                j, i + 0.22,
+                f"({lo:.2f}, {hi:.2f})",
+                ha="center", va="center",
+                fontsize=7.5,
+                color=text_color,
+            )
+
+    ax.set_xticks(range(n_classes))
+    ax.set_yticks(range(n_classes))
+    ax.set_xticklabels(class_names, rotation=30, ha="right", fontsize=9)
+    ax.set_yticklabels(class_names, fontsize=9)
+    ax.set_xlabel("Predicted Label", fontsize=11, labelpad=10)
+    ax.set_ylabel("True Label",      fontsize=11, labelpad=10)
+    ax.set_title(title, fontsize=13, pad=12)
+
+    plt.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Confusion matrix saved → {save_path}")
+
+    if show:
+        plt.show()
+
+    plt.close(fig)
+    return cm_norm, ci_low, ci_high
+
 
 # calculating metrics
 def calculate_metrics(labels, predictions):

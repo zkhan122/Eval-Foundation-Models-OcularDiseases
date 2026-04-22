@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from data_processing.dataset import CombinedDRDataSet
-from utilities.utils import json_to_csv, identity_transform, show_images, test_urfound,  calculate_metrics
+from utilities.utils import json_to_csv, identity_transform, show_images, test_urfound,  calculate_metrics, plot_confusion_matrix_with_ci
 from torch import nn
 from torch import optim
 from torch.cuda.amp import autocast, GradScaler
@@ -181,6 +181,17 @@ json_to_csv(results_path, "results/urfound", "urfound_nonlora_test_results")
 
 np.save("../probs_numpy/urfound-dr-nonlora-true.npy", y_true)
 np.save("../probs_numpy/urfound-dr-nonlora-testing.npy", y_probs)
+
+y_pred = np.argmax(y_probs, axis=1)
+class_names = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+
+plot_confusion_matrix_with_ci(
+    y_true      = y_true,
+    y_pred      = y_pred,
+    class_names = class_names,
+    title       = "CLIP-LoRA DR Grading",
+    save_path   = "../../../plots/confusion_matrices/non-lora/urfound_ci.png",
+)
 
 print(f"\nResults saved to: {results_path}")
 print("="*70)
