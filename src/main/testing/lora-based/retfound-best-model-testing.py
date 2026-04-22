@@ -256,8 +256,8 @@ def main():
         y_true      = y_true,
         y_pred      = y_pred,
         class_names = class_names,
-        title       = "CLIP-LoRA DR Grading",
-        save_path   = "../../../plots/confusion_matrices/lora/retfound_cf.png",
+        title       = "RETFound-LoRA DR Grading",
+        save_path   = "../../../plots/confusion_matrices/dr/lora/retfound_cf.png",
     )
 
 if __name__ == "__main__":

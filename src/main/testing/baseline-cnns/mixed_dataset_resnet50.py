@@ -16,7 +16,7 @@ from transformers import ResNetForImageClassification
 from sklearn.metrics import roc_auc_score, f1_score, classification_report, precision_score
 
 from data_processing.mixed_dataset import ODIRDataset, ODIR_CLASS_NAMES, NUM_CLASSES
-from utilities.utils import json_to_csv
+from utilities.utils import json_to_csv, plot_confusion_matrix_with_ci
 
 NUM_WORKERS = 4
 DEVICE      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -207,7 +207,18 @@ def main():
 
     print(f"\nResults saved to: {results_path}")
     print("=" * 70)
+    
+    y_pred = np.argmax(y_probs, axis=1)
+    y_true = np.argmax(y_true, axis=1)
+    class_names = ["Normal", "Diabetes", "Glaucoma", "Cataract", "AMD", "Hypertension", "Myopia", "Other"]
 
+    plot_confusion_matrix_with_ci(
+        y_true      = y_true,
+        y_pred      = y_pred,
+        class_names = class_names,
+        title       = "Mixed-Disease-ResNet50 DR Grading",
+        save_path   = "../../../plots/confusion_matrices/mixed-disease/non-lora/resnet50_cf.png",
+    )
 
 if __name__ == "__main__":
     main()

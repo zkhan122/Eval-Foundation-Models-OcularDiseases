@@ -189,8 +189,8 @@ plot_confusion_matrix_with_ci(
     y_true      = y_true,
     y_pred      = y_pred,
     class_names = class_names,
-    title       = "CLIP-LoRA DR Grading",
-    save_path   = "../../../plots/confusion_matrices/non-lora/urfound_ci.png",
+    title       = "UrFound-No-LoRA DR Grading",
+    save_path   = "../../../plots/confusion_matrices/dr/non-lora/urfound_ci.png",
 )
 
 print(f"\nResults saved to: {results_path}")

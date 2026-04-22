@@ -227,8 +227,8 @@ def main():
         y_true      = y_true,
         y_pred      = y_pred,
         class_names = class_names,
-        title       = "CLIP-LoRA DR Grading",
-        save_path   = "../../../plots/confusion_matrices/non-lora/retfound_cf.png",
+        title       = "RETFound-No-LoRA DR Grading",
+        save_path   = "../../../plots/confusion_matrices/dr/non-lora/retfound_cf.png",
     )
 
     print(f"\nResults saved to: {results_path}")

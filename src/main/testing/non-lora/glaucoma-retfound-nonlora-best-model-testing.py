@@ -19,7 +19,7 @@ from sklearn.metrics import (
 )
 
 from data_processing.glaucoma_dataset import CombinedGlaucomaDataset
-from utilities.utils import identity_transform, json_to_csv
+from utilities.utils import identity_transform, json_to_csv, plot_confusion_matrix_with_ci
 import numpy as np
 
 NUM_CLASSES = 2
@@ -210,6 +210,16 @@ def main():
     np.save("../probs_numpy/retfound_glaucoma_nonlora_probs.npy", y_probs)
     print(f"\nResults saved to: {results_path}")
 
+    y_pred = np.argmax(y_probs, axis=1)
+    class_names = ["Healthy", "GLaucoma"]
+
+    plot_confusion_matrix_with_ci(
+        y_true      = y_true,
+        y_pred      = y_pred,
+        class_names = class_names,
+        title       = "RETFound-No-LoRA Glaucoma",
+        save_path   = "../../../plots/confusion_matrices/glaucoma/non-lora/retfound_cf.png",
+    )
 
 if __name__ == "__main__":
     main()
