@@ -98,13 +98,18 @@ def evaluate(model, dataloader, criterion, device, threshold):
     report = classification_report(
         y_true, y_pred,
         target_names=class_names,
-        digits=4,
-        zero_division=0
+        output_dict=True
     )
+
+    per_class_recall = {
+        name: report[name]["recall"]
+        for name in ["Healthy", "Glaucoma"]
+    }
+    
 
     return (avg_loss, acc, bal_acc, macro_f1, precision,
             per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
-            sensitivity, specificity, report, y_true, y_probs)
+            sensitivity, specificity, report, per_class_recall, y_true, y_probs)
 
 
 def main():
@@ -163,7 +168,7 @@ def main():
     THRESHOLD = 0.6
     (test_loss, acc, bal_acc, macro_f1, precision,
      per_class_auc, macro_auc, weighted_auc, recall_macro, recall_weighted, recall_per_class,
-     sensitivity, specificity, report, y_true, y_probs) = evaluate(
+     sensitivity, specificity, report, per_class_recall, y_true, y_probs) = evaluate(
         model, test_loader, criterion, DEVICE, THRESHOLD
     )
 
@@ -201,6 +206,7 @@ def main():
             "Healthy": float(recall_per_class[0]),
             "Glaucoma": float(recall_per_class[1])
         },
+        "per_class_recall": per_class_recall,
         "test_loss":         float(test_loss),
         "checkpoint":        os.path.basename(best_path),
         "train":             train_cfg,

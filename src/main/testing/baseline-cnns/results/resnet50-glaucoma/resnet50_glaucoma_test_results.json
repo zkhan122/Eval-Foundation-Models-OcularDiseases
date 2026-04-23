@@ -17,6 +17,10 @@
         "Healthy": 73.89770723104057,
         "Glaucoma": 64.09691629955947
     },
+    "per_class_recall": {
+        "Healthy": 0.7389770723104057,
+        "Glaucoma": 0.6409691629955947
+    },
     "test_loss": 0.6106149826664478,
     "checkpoint": "best_resnet50_glaucoma_model.pth",
     "train": {
