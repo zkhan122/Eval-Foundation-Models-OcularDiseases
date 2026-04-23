@@ -15,7 +15,7 @@ from torch import nn
 from transformers import CLIPVisionModelWithProjection
 from sklearn.metrics import (
     roc_auc_score, balanced_accuracy_score, f1_score,
-    classification_report, confusion_matrix
+    classification_report, confusion_matrix, precision_score
 )
 from peft import get_peft_model, LoraConfig
 
@@ -107,13 +107,24 @@ def evaluate(model, dataloader, criterion, device, threshold):
     report = classification_report(
         y_true, y_pred,
         target_names=class_names,
-        digits=4,
-        zero_division=0
+        output_dict=True
     )
+
+
+
+    per_class_recall = {
+        name: report[name]["recall"]
+        for name in ["Healthy", "Glaucoma"]
+    }
+    
+    per_class_precision = {
+        name: report[name]["precision"]
+        for name in ["Healthy", "Glaucoma"]
+    }
 
     return (avg_loss, acc, bal_acc, macro_f1,
             per_class_auc, macro_auc, weighted_auc,
-            sensitivity, specificity, report, y_true, y_probs)
+            sensitivity, specificity, report, per_class_recall, per_class_precision, y_true, y_probs)
 
 
 def main():
@@ -180,7 +191,7 @@ def main():
     THRESHOLD = 0.6
     (test_loss, acc, bal_acc, macro_f1,
      per_class_auc, macro_auc, weighted_auc,
-     sensitivity, specificity, report, y_true, y_probs) = evaluate(
+     sensitivity, specificity, report, per_class_recall, per_class_precision, y_true, y_probs) = evaluate(
         model, test_loader, criterion, DEVICE, THRESHOLD
     )
 
@@ -210,6 +221,8 @@ def main():
         "weighted_auc":      float(weighted_auc),
         "per_class_auc":     {k: float(v) if v is not None else None
                               for k, v in per_class_auc.items()},
+        "per_class_recall": per_class_recall, 
+        "per_class_precision": per_class_precision,
         "test_loss":         float(test_loss),
         "checkpoint":        os.path.basename(best_path),
         "lora":              lora_cfg,

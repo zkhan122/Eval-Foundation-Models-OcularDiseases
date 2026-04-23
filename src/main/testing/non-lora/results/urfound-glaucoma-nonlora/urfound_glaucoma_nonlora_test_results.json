@@ -10,6 +10,14 @@
         "Healthy": 59.93559113970274,
         "Glaucoma": 59.93559113970274
     },
+    "per_class_recall": {
+        "Healthy": 0.7689594356261023,
+        "Glaucoma": 0.4052863436123348
+    },
+    "per_class_precision": {
+        "Healthy": 0.6175637393767706,
+        "Glaucoma": 0.5841269841269842
+    },
     "test_loss": 0.7147499264683574,
     "checkpoint": "best_urfound_glaucoma_nonlora_model.pth",
     "train": {
