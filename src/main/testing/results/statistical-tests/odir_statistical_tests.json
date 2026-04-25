@@ -1,0 +1,110 @@
+{
+    "bootstrap_ci": {
+        "RETFound-ODIR": {
+            "Exact Match": {
+                "mean": 32.873182173573106,
+                "ci_lo": 30.412431587177483,
+                "ci_hi": 35.49843627834245
+            },
+            "Macro F1": {
+                "mean": 56.44705968381342,
+                "ci_lo": 53.95193010256945,
+                "ci_hi": 58.912118612917375
+            },
+            "Macro AUC": {
+                "mean": 89.75264536484387,
+                "ci_lo": 88.2425098672372,
+                "ci_hi": 91.0015519566323
+            }
+        },
+        "ResNet50-ODIR": {
+            "Exact Match": {
+                "mean": 22.234010946051605,
+                "ci_lo": 20.093823299452698,
+                "ci_hi": 24.550430023455824
+            },
+            "Macro F1": {
+                "mean": 45.13486816260901,
+                "ci_lo": 42.87437400310653,
+                "ci_hi": 47.303619518141346
+            },
+            "Macro AUC": {
+                "mean": 83.30160679164922,
+                "ci_lo": 81.33495462413289,
+                "ci_hi": 84.96659781362335
+            }
+        }
+    },
+    "per_label_mcnemar": {
+        "RETFound-ODIR_vs_ResNet50-ODIR": {
+            "Normal": {
+                "chi2": 7.462837837837838,
+                "p_value": 0.006298563551684344,
+                "b01": 124,
+                "b10": 172,
+                "significant": true
+            },
+            "Diabetes": {
+                "chi2": 32.362459546925564,
+                "p_value": 1.2793426984458733e-08,
+                "b01": 104,
+                "b10": 205,
+                "significant": true
+            },
+            "Glaucoma": {
+                "chi2": 15.008928571428571,
+                "p_value": 0.00010700371395688801,
+                "b01": 35,
+                "b10": 77,
+                "significant": true
+            },
+            "Cataract": {
+                "chi2": 14.666666666666666,
+                "p_value": 0.00012829517819534786,
+                "b01": 5,
+                "b10": 28,
+                "significant": true
+            },
+            "AMD": {
+                "chi2": 134.88446215139442,
+                "p_value": 0.0,
+                "b01": 33,
+                "b10": 218,
+                "significant": true
+            },
+            "Hypertension": {
+                "chi2": 32.516129032258064,
+                "p_value": 1.1820741385726308e-08,
+                "b01": 66,
+                "b10": 151,
+                "significant": true
+            },
+            "Myopia": {
+                "chi2": 6.722222222222222,
+                "p_value": 0.009521891184098852,
+                "b01": 3,
+                "b10": 15,
+                "significant": true
+            },
+            "Other": {
+                "chi2": 40.563380281690144,
+                "p_value": 1.903406321446255e-10,
+                "b01": 117,
+                "b10": 238,
+                "significant": true
+            }
+        }
+    },
+    "permutation_macro_f1": {
+        "RETFound-ODIR_vs_ResNet50-ODIR": {
+            "macro_f1_difference": 11.290061511717802,
+            "p_value": 0.0001999600079984003,
+            "significant": true
+        }
+    },
+    "config": {
+        "n_bootstrap": 1000,
+        "n_permutations": 5000,
+        "alpha": 0.05
+    }
+}

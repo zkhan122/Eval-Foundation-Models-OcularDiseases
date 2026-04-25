@@ -1,401 +1,346 @@
-import os, json
+import os
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from itertools import combinations
 from scipy.stats import chi2
-from sklearn.metrics import (
-    balanced_accuracy_score, f1_score, roc_auc_score, cohen_kappa_score
-)
-
-# -------------------------
-# config
-# -------------------------
+from sklearn.metrics import f1_score, roc_auc_score
 
 PROBS_DIR = "./testing/probs_numpy"
-OUT_DIR   = "./testing/results/statistical-tests"
-PLOT_DIR  = "../plots/statistical-tests"
-N_BOOT    = 1000
-ALPHA     = 0.05
-CI        = 95
-THRESHOLD = 0.6    
-rng       = np.random.default_rng(42)
+OUT_DIR = "./testing/results/statistical-tests"
+PLOT_DIR = "../plots/statistical-tests"
+
+N_BOOT = 1000
+N_PERM = 5000
+ALPHA = 0.05
+CI = 95
+
+rng = np.random.default_rng(42)
 
 RC = {
-    'font.family': 'serif', 'font.serif': ['Times New Roman', 'DejaVu Serif'],
-    'axes.labelsize': 11, 'axes.titlesize': 12,
-    'xtick.labelsize': 9, 'ytick.labelsize': 9, 'figure.dpi': 150,
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "DejaVu Serif"],
+    "axes.labelsize": 11,
+    "axes.titlesize": 12,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "figure.dpi": 150
 }
 
-GLAUCOMA_MODELS = {
-    "RetFound-LoRA-Glaucoma":     "retfound_lora_glaucoma",
-    "RetFound-NoLoRA-Glaucoma":   "retfound_glaucoma_nonlora",
-    "UrFound-LoRA-Glaucoma":     "urfound_lora_glaucoma",
-    "UrFound-NoLoRA-Glaucoma":   "urfound_nonlora_glaucoma",
-    "CLIP-LoRA-Glaucoma":   "clip_lora_glaucoma",
-    "CLIP-NoLoRA-Glaucoma": "clip_nonlora_glaucoma",
-    "ResNet50-Glaucoma":    "resnet50_glaucoma",
-}
-DR_MODELS = {
-    "RetFound-LoRA-DR":     "retfound_dr_lora",
-    "RetFound-NoLoRA-DR":   "retfound_dr_nonlora",
-    "UrFound-LoRA-DR":     "urfound_lora_dr",
-    "UrFound-NoLoRA-DR":   "urfound-dr-nonlora",
-    "CLIP-LoRA-DR":   "clip_dr_lora",
-    "CLIP-NoLoRA-DR": "clip-dr-nonlora",
-    "ResNet50-DR":    "resnet50-dr",
+ODIR_MODELS = {
+    "RETFound-ODIR": "retfound_mixed_disease",
+    "ResNet50-ODIR": "resnet50_mixed_disease"
 }
 
-
-# -------------------------
-# loading — y_pred derived from y_probs
-# -------------------------
-
-def load(prefix, task):
-    yt  = np.load(f"{PROBS_DIR}/{prefix}_true.npy")
-    ypr = np.load(f"{PROBS_DIR}/{prefix}_probs.npy")
-    yp  = (ypr[:, 1] >= THRESHOLD).astype(int) if task == "glaucoma" \
-          else ypr.argmax(axis=1)
-    return yt, yp, ypr
+ODIR_CLASS_NAMES = [
+    "Normal", "Diabetes", "Glaucoma", "Cataract",
+    "AMD", "Hypertension", "Myopia", "Other"
+]
 
 def exists(prefix):
-    return all(os.path.exists(f"{PROBS_DIR}/{prefix}_{s}.npy")
-               for s in ["true", "probs"])
-
-
-# metrics
-
-def compute_metrics(yt, yp, ypr, task):
-    m = {
-        "Balanced Acc": 100.0 * balanced_accuracy_score(yt, yp),
-        "Macro F1":     100.0 * f1_score(yt, yp, average="macro", zero_division=0),
-    }
-    try:
-        m["Macro AUC"] = 100.0 * (
-            roc_auc_score(yt, ypr[:, 1]) if task == "glaucoma"
-            else roc_auc_score(yt, ypr, multi_class="ovr", average="macro")
-        )
-    except ValueError:
-        m["Macro AUC"] = 0.0
-    if task == "dr":
-        try:    m["QWK"] = cohen_kappa_score(yt, yp, weights="quadratic")
-        except: m["QWK"] = 0.0
-    return m
-
-
-# bootstrap CI
-
-def bootstrap(yt, yp, ypr, task):
-    keys   = list(compute_metrics(yt, yp, ypr, task).keys())
-    scores = {k: [] for k in keys}
-    n      = len(yt)
-    for _ in range(N_BOOT):
-        idx = rng.integers(0, n, size=n)
-        for k, v in compute_metrics(yt[idx], yp[idx], ypr[idx], task).items():
-            scores[k].append(v)
-    lo = (100 - CI) / 2
-    return {k: (float(np.mean(v)),
-                float(np.percentile(v, lo)),
-                float(np.percentile(v, 100 - lo)))
-            for k, v in scores.items()}
-
-
-# McNemar's test
-
-def mcnemar(yt, yp_a, yp_b):
-    b01 = int(np.sum((yp_a != yt) & (yp_b == yt)))
-    b10 = int(np.sum((yp_a == yt) & (yp_b != yt)))
-    d   = b01 + b10
-    if d == 0: return 0.0, 1.0, b01, b10
-    stat = (abs(b01 - b10) - 1.0) ** 2 / d
-    return float(stat), float(1.0 - chi2.cdf(stat, df=1)), b01, b10
+    return all(
+        os.path.exists(f"{PROBS_DIR}/{prefix}_{s}.npy")
+        for s in ["true", "probs"]
+    )
 
 def stars(p):
     return "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
 
-
-# plot: horizontal bar chart with CIs
-
-def plot_ci(ci_all, title, path):
-    plt.rcParams.update(RC)
-    models = list(ci_all.keys())
-    met    = list(next(iter(ci_all.values())).keys())
-    n_m    = len(models)
-
-    fig, axes = plt.subplots(1, len(met),
-                             figsize=(4.5 * len(met), max(3, n_m * 0.55 + 1.5)))
-    if len(met) == 1: axes = [axes]
-
-    for ax, metric in zip(axes, met):
-        y      = np.arange(n_m)
-        means  = [ci_all[m][metric][0] for m in models]
-        lowers = [ci_all[m][metric][0] - ci_all[m][metric][1] for m in models]
-        uppers = [ci_all[m][metric][2] - ci_all[m][metric][0] for m in models]
-
-        bars = ax.barh(y, means, xerr=[lowers, uppers], align='center',
-                       color='#4c72b0', ecolor='#c0392b', capsize=4,
-                       height=0.55, error_kw={"linewidth": 1.5, "zorder": 5})
-
-        for bar, mean in zip(bars, means):
-            ax.text(bar.get_width() * 0.98, bar.get_y() + bar.get_height() / 2,
-                    f'{mean:.2f}', va='center', ha='right',
-                    fontsize=8, color='white', fontweight='bold')
-
-        ax.set_yticks(y)
-        ax.set_yticklabels(models)
-        ax.set_xlabel(f"{metric} ({CI}% CI)")
-        ax.set_title(metric)
-        ax.grid(axis='x', alpha=0.3, linewidth=0.6)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-
-    fig.suptitle(title, fontsize=13, y=1.02)
-    plt.tight_layout()
-    plt.savefig(path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved: {path}")
-
-# plot: McNemar p-value heatmap with significance stars
-
-def plot_mcnemar(mc, model_names, title, path):
-    plt.rcParams.update(RC)
-    n = len(model_names)
-    idx = {m: i for i, m in enumerate(model_names)}
-
-    # separate matrices for p-value, chi2, b01 and b10
-    # initialise p_mat to 1.0 (not significant) and the rest to 0
-    p_mat   = np.ones((n, n))
-    chi_mat = np.zeros((n, n))
-    b01_mat = np.zeros((n, n), dtype=int)
-    b10_mat = np.zeros((n, n), dtype=int)
-
-    for pair, (stat, p, b01, b10) in mc.items():
-        a, b = pair.split("_vs_")
-        if a in idx and b in idx:
-            i, j = idx[a], idx[b]
-            # McNemar is symmetric so fill both directions
-            p_mat[i, j]   = p_mat[j, i]   = p
-            chi_mat[i, j] = chi_mat[j, i] = stat
-            b01_mat[i, j] = b10_mat[j, i] = b01   # direction: A wrong B right
-            b10_mat[i, j] = b01_mat[j, i] = b10   # direction: A right B wrong
-
-    # build multi-line annotation for every off-diagonal cell
-    annot = np.empty((n, n), dtype=object)
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                annot[i, j] = ""
-            else:
-                annot[i, j] = (
-                    f"p={p_mat[i,j]:.3f} {stars(p_mat[i,j])}\n"
-                    f"χ²={chi_mat[i,j]:.1f}\n"
-                    f"b01={b01_mat[i,j]}\n"
-                    f"b10={b10_mat[i,j]}"
-                )
-
-    # scale figure generously so the four-line annotations have room
-    cell  = max(1.8, n * 1.1)
-    fig, ax = plt.subplots(figsize=(cell, cell))
-
-    sns.heatmap(
-        p_mat,
-        annot=annot,
-        fmt="",
-        mask=np.eye(n, dtype=bool),
-        xticklabels=model_names,
-        yticklabels=model_names,
-        cmap="RdYlGn_r",
-        vmin=0,
-        vmax=0.1,
-        ax=ax,
-        linewidths=0.5,
-        cbar_kws={"label": "p-value", "shrink": 0.7},
-        annot_kws={"size": max(5, 8 - n)}   # shrink font as matrix grows
-    )
-
-    ax.set_title(
-        f"{title}\n"
-        f"* p<0.05  ** p<0.01  *** p<0.001  ns = not significant\n"
-        f"b01 = A wrong, B correct  |  b10 = A correct, B wrong",
-        pad=12, fontsize=9
-    )
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
-    ax.tick_params(axis='y', rotation=0)
-    plt.tight_layout()
-    plt.savefig(path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved: {path}")
-
-
-# runner
-
-def run(model_map, task, label):
-    print(f"\n{'='*60}\n{label}\n{'='*60}")
-    ci_all, pred_map = {}, {}
-
-    for name, prefix in model_map.items():
-        if not exists(prefix):
-            print(f"  Skipping {name} — {prefix}_true/probs.npy not found")
-            continue
-        yt, yp, ypr    = load(prefix, task)
-        ci_all[name]   = bootstrap(yt, yp, ypr, task)
-        pred_map[name] = (yt, yp)
-        for k, (mean, lo, hi) in ci_all[name].items():
-            print(f"  {name:<14} {k:<14}: {mean:.2f}  ({CI}% CI {lo:.2f}–{hi:.2f})")
-
-    print(f"\n  McNemar's Test")
-    mc = {}
-    for a, b in combinations(list(pred_map.keys()), 2):
-        yta, ypa = pred_map[a]
-        ytb, ypb = pred_map[b]
-        if len(yta) != len(ytb): continue
-        stat, p, b01, b10 = mcnemar(yta, ypa, ypb)
-        mc[f"{a}_vs_{b}"] = (stat, p, b01, b10)
-        print(f"  {a:<14} vs {b:<14}: chi2={stat:.3f}  p={p:.4f}  "
-              f"{stars(p)}  (b01={b01} b10={b10})")
-
-    os.makedirs(PLOT_DIR, exist_ok=True)
-    slug = task.lower()
-    if ci_all:
-        plot_ci(ci_all, f"{label} — Bootstrap {CI}% Confidence Intervals",
-                f"{PLOT_DIR}/{slug}_bootstrap_ci.png")
-    if mc:
-        plot_mcnemar(mc, list(pred_map.keys()),
-                     f"{label} — McNemar's Test",
-                     f"{PLOT_DIR}/{slug}_mcnemar.png")
-
-    return ci_all, mc
-
-
-# main
-
-ODIR_MODELS = {
-    "RETFound-ODIR":  "retfound_mixed_disease",
-    "ResNet50-ODIR":  "resnet50_mixed_disease",
-}
-
-ODIR_CLASS_NAMES = ["Normal", "Diabetes", "Glaucoma", "Cataract",
-                    "AMD", "Hypertension", "Myopia", "Other"]
-
-
 def load_odir(prefix):
-    """Load ODIR multi-label probs and derive binary predictions at threshold 0.5."""
-    yt  = np.load(f"{PROBS_DIR}/{prefix}_true.npy")    # (N, 8) float
-    ypr = np.load(f"{PROBS_DIR}/{prefix}_probs.npy")   # (N, 8) sigmoid probs
-    yp  = (ypr >= 0.5).astype(int)                     # (N, 8) binary preds
+    yt = np.load(f"{PROBS_DIR}/{prefix}_true.npy").astype(int)
+    ypr = np.load(f"{PROBS_DIR}/{prefix}_probs.npy").astype(float)
+    yp = (ypr >= 0.5).astype(int)
     return yt, yp, ypr
 
-
-def compute_metrics_odir(yt, yp, ypr):
-    """
-    Metrics for multi-label ODIR.
-    yt, yp : (N, 8) int arrays
-    ypr    : (N, 8) float probability arrays
-    """
-    from sklearn.metrics import roc_auc_score, f1_score
+def compute_metrics(yt, yp, ypr):
     m = {}
-
-    # exact match accuracy
-    m["Exact Match"] = 100.0 * float((yp == yt.astype(int)).all(axis=1).mean())
-
-    # macro F1
+    m["Exact Match"] = 100.0 * float((yp == yt).all(axis=1).mean())
     m["Macro F1"] = 100.0 * float(
         f1_score(yt, yp, average="macro", zero_division=0)
     )
-
-    # macro AUC — primary metric for ODIR
     try:
         m["Macro AUC"] = 100.0 * float(
             roc_auc_score(yt, ypr, average="macro")
         )
     except ValueError:
         m["Macro AUC"] = 0.0
-
     return m
 
+def bootstrap_ci(yt, yp, ypr):
+    keys = list(compute_metrics(yt, yp, ypr).keys())
+    vals = {k: [] for k in keys}
+    n = len(yt)
 
-def bootstrap_odir(yt, yp, ypr):
-    keys   = list(compute_metrics_odir(yt, yp, ypr).keys())
-    scores = {k: [] for k in keys}
-    n      = len(yt)
     for _ in range(N_BOOT):
         idx = rng.integers(0, n, size=n)
-        for k, v in compute_metrics_odir(yt[idx], yp[idx], ypr[idx]).items():
-            scores[k].append(v)
+        res = compute_metrics(yt[idx], yp[idx], ypr[idx])
+        for k, v in res.items():
+            vals[k].append(v)
+
     lo = (100 - CI) / 2
-    return {k: (float(np.mean(v)),
-                float(np.percentile(v, lo)),
-                float(np.percentile(v, 100 - lo)))
-            for k, v in scores.items()}
 
+    return {
+        k: (
+            float(np.mean(v)),
+            float(np.percentile(v, lo)),
+            float(np.percentile(v, 100 - lo))
+        )
+        for k, v in vals.items()
+    }
 
-def run_odir(model_map, label):
-    """
-    Bootstrap CI for ODIR multi-label models.
-    McNemar's test is not applied — it is not defined for multi-label problems.
-    """
-    print(f"\n{'='*60}\n{label}\n{'='*60}")
-    ci_all = {}
+def mcnemar_test(y_true, pred_a, pred_b):
+    a_ok = pred_a == y_true
+    b_ok = pred_b == y_true
 
-    for name, prefix in model_map.items():
-        if not exists(prefix):
-            print(f"  Skipping {name} — {prefix}_true/probs.npy not found")
-            continue
-        yt, yp, ypr  = load_odir(prefix)
-        ci_all[name] = bootstrap_odir(yt, yp, ypr)
-        for k, (mean, lo, hi) in ci_all[name].items():
-            print(f"  {name:<20} {k:<14}: {mean:.2f}  ({CI}% CI {lo:.2f}–{hi:.2f})")
+    b01 = int(np.sum((~a_ok) & b_ok))
+    b10 = int(np.sum(a_ok & (~b_ok)))
 
-    print(f"\n  Note: McNemar's test is not applicable for multi-label classification.")
+    d = b01 + b10
 
-    os.makedirs(PLOT_DIR, exist_ok=True)
-    if ci_all:
-        plot_ci(ci_all, f"{label} — Bootstrap {CI}% Confidence Intervals",
-                f"{PLOT_DIR}/odir_bootstrap_ci.png")
+    if d == 0:
+        return 0.0, 1.0, b01, b10
 
-    return ci_all
+    stat = (abs(b01 - b10) - 1.0) ** 2 / d
+    p = 1.0 - chi2.cdf(stat, 1)
 
+    return float(stat), float(p), b01, b10
 
-def main():
+def permutation_macro_f1(yt, pa, pb):
+    obs = (
+        f1_score(yt, pa, average="macro", zero_division=0)
+        -
+        f1_score(yt, pb, average="macro", zero_division=0)
+    )
+
+    n = len(yt)
+    count = 0
+
+    for _ in range(N_PERM):
+        mask = rng.integers(0, 2, size=n).astype(bool)
+
+        xa = pa.copy()
+        xb = pb.copy()
+
+        xa[mask], xb[mask] = pb[mask], pa[mask].copy()
+
+        diff = (
+            f1_score(yt, xa, average="macro", zero_division=0)
+            -
+            f1_score(yt, xb, average="macro", zero_division=0)
+        )
+
+        if abs(diff) >= abs(obs):
+            count += 1
+
+    p = (count + 1) / (N_PERM + 1)
+
+    return float(obs * 100.0), float(p)
+
+def plot_ci(ci_all, path):
+    plt.rcParams.update(RC)
+
+    models = list(ci_all.keys())
+    metrics = list(next(iter(ci_all.values())).keys())
+
+    fig, axes = plt.subplots(
+        1, len(metrics),
+        figsize=(4.5 * len(metrics), max(3, len(models) * 0.8 + 1.5))
+    )
+
+    if len(metrics) == 1:
+        axes = [axes]
+
+    for ax, metric in zip(axes, metrics):
+        y = np.arange(len(models))
+
+        means = [ci_all[m][metric][0] for m in models]
+        lowers = [ci_all[m][metric][0] - ci_all[m][metric][1] for m in models]
+        uppers = [ci_all[m][metric][2] - ci_all[m][metric][0] for m in models]
+
+        bars = ax.barh(
+            y, means,
+            xerr=[lowers, uppers],
+            capsize=4,
+            height=0.55
+        )
+
+        for bar, val in zip(bars, means):
+            ax.text(
+                bar.get_width() * 0.98,
+                bar.get_y() + bar.get_height() / 2,
+                f"{val:.2f}",
+                ha="right",
+                va="center",
+                fontsize=8,
+                color="white",
+                fontweight="bold"
+            )
+
+        ax.set_yticks(y)
+        ax.set_yticklabels(models)
+        ax.set_title(metric)
+        ax.grid(axis="x", alpha=0.3)
+
+    fig.suptitle(f"ODIR-5K Bootstrap {CI}% Confidence Intervals")
+    plt.tight_layout()
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+def plot_mcnemar_heatmap(results, pair_name, path):
+    plt.rcParams.update(RC)
+
+    pvals = np.array([[results[c]["p_value"]] for c in ODIR_CLASS_NAMES])
+    annot = np.array([
+        [
+            f"p={results[c]['p_value']:.3f} {stars(results[c]['p_value'])}\n"
+            f"χ²={results[c]['chi2']:.2f}\n"
+            f"b01={results[c]['b01']} b10={results[c]['b10']}"
+        ]
+        for c in ODIR_CLASS_NAMES
+    ])
+
+    fig, ax = plt.subplots(figsize=(5, 6))
+
+    sns.heatmap(
+        pvals,
+        annot=annot,
+        fmt="",
+        cmap="RdYlGn_r",
+        vmin=0,
+        vmax=0.1,
+        cbar_kws={"label": "p-value"},
+        yticklabels=ODIR_CLASS_NAMES,
+        xticklabels=[pair_name],
+        linewidths=0.5,
+        ax=ax
+    )
+
+    ax.set_title("Per-label McNemar Test")
+    plt.tight_layout()
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+def plot_permutation(results, path):
+    plt.rcParams.update(RC)
+
+    names = list(results.keys())
+    diffs = [results[k]["macro_f1_difference"] for k in names]
+    pvals = [results[k]["p_value"] for k in names]
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    bars = ax.barh(np.arange(len(names)), diffs, height=0.55)
+
+    for i, bar in enumerate(bars):
+        ax.text(
+            bar.get_width(),
+            bar.get_y() + bar.get_height() / 2,
+            f" {diffs[i]:.2f} ({stars(pvals[i])})",
+            va="center"
+        )
+
+    ax.set_yticks(np.arange(len(names)))
+    ax.set_yticklabels(names)
+    ax.set_xlabel("Δ Macro F1 (%)")
+    ax.set_title("Permutation Test")
+    ax.grid(axis="x", alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+def run():
     os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(PLOT_DIR, exist_ok=True)
 
-    g_ci, g_mc = run(GLAUCOMA_MODELS, "glaucoma", "Glaucoma Detection")
-    d_ci, d_mc = run(DR_MODELS,       "dr",       "DR Severity Grading")
-    o_ci       = run_odir(ODIR_MODELS,             "ODIR-5K Multi-Label Classification")
+    ci_all = {}
+    pred_map = {}
 
-    def serialise(ci, mc):
-        return {
-            "bootstrap_ci": {
-                m: {k: {"mean": v[0], "ci_lo": v[1], "ci_hi": v[2]}
-                    for k, v in met.items()}
-                for m, met in ci.items()
-            },
-            "mcnemar": {
-                pair: {"chi2": v[0], "p_value": v[1],
-                       "b01": v[2], "b10": v[3],
-                       "significant": v[1] < ALPHA}
-                for pair, v in mc.items()
+    for name, prefix in ODIR_MODELS.items():
+        if not exists(prefix):
+            continue
+
+        yt, yp, ypr = load_odir(prefix)
+        ci_all[name] = bootstrap_ci(yt, yp, ypr)
+        pred_map[name] = (yt, yp, ypr)
+
+        for k, v in ci_all[name].items():
+            print(
+                f"{name:<16} {k:<12}: "
+                f"{v[0]:.2f} ({CI}% CI {v[1]:.2f}-{v[2]:.2f})"
+            )
+
+    pair_results = {}
+    perm_results = {}
+
+    for a, b in combinations(pred_map.keys(), 2):
+        yt, pa, _ = pred_map[a]
+        _, pb, _ = pred_map[b]
+
+        pair = f"{a}_vs_{b}"
+        pair_results[pair] = {}
+
+        for j, cname in enumerate(ODIR_CLASS_NAMES):
+            stat, p, b01, b10 = mcnemar_test(
+                yt[:, j],
+                pa[:, j],
+                pb[:, j]
+            )
+
+            pair_results[pair][cname] = {
+                "chi2": stat,
+                "p_value": p,
+                "b01": b01,
+                "b10": b10,
+                "significant": p < ALPHA
             }
+
+        diff, p = permutation_macro_f1(yt, pa, pb)
+
+        perm_results[pair] = {
+            "macro_f1_difference": diff,
+            "p_value": p,
+            "significant": p < ALPHA
         }
 
-    with open(f"{OUT_DIR}/statistical_tests.json", "w") as f:
-        json.dump({
-            "glaucoma":   serialise(g_ci, g_mc),
-            "dr_grading": serialise(d_ci, d_mc),
-            "odir_multilabel": {
-                "bootstrap_ci": {
-                    m: {k: {"mean": v[0], "ci_lo": v[1], "ci_hi": v[2]}
-                        for k, v in met.items()}
-                    for m, met in o_ci.items()
-                },
-                "note": "McNemar's test not applicable for multi-label classification"
-            },
-            "config": {"n_bootstrap": N_BOOT, "ci": CI,
-                       "alpha": ALPHA, "glaucoma_threshold": THRESHOLD}
-        }, f, indent=4)
+    plot_ci(ci_all, f"{PLOT_DIR}/odir_bootstrap_ci.png")
 
-    print(f"\nAll results saved to: {OUT_DIR}")
+    for pair, res in pair_results.items():
+        plot_mcnemar_heatmap(
+            res,
+            pair,
+            f"{PLOT_DIR}/{pair.lower()}_mcnemar.png"
+        )
 
+    plot_permutation(
+        perm_results,
+        f"{PLOT_DIR}/odir_permutation_macro_f1.png"
+    )
+
+    out = {
+        "bootstrap_ci": {
+            m: {
+                k: {
+                    "mean": v[0],
+                    "ci_lo": v[1],
+                    "ci_hi": v[2]
+                }
+                for k, v in met.items()
+            }
+            for m, met in ci_all.items()
+        },
+        "per_label_mcnemar": pair_results,
+        "permutation_macro_f1": perm_results,
+        "config": {
+            "n_bootstrap": N_BOOT,
+            "n_permutations": N_PERM,
+            "alpha": ALPHA
+        }
+    }
+
+    with open(f"{OUT_DIR}/odir_statistical_tests.json", "w") as f:
+        json.dump(out, f, indent=4)
 
 if __name__ == "__main__":
-    main()
+    run()
